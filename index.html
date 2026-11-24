@@ -1,1656 +1,1010 @@
-<!DOCTYPE html>
-<html lang="fr" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FinTrack AI — Gestion Financière Intelligente</title>
-    <!-- Chart.js pour les graphiques interactifs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Phosphor Icons pour des icônes modernes -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <style>
-        :root {
-            --bg-body: #f3f5f9;
-            --bg-card: #ffffff;
-            --bg-input: #f8fafc;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border-color: #e2e8f0;
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --primary-soft: rgba(37, 99, 235, 0.1);
-            --success: #10b981;
-            --success-soft: rgba(16, 185, 129, 0.12);
-            --danger: #ef4444;
-            --danger-soft: rgba(239, 68, 68, 0.12);
-            --warning: #f59e0b;
-            --warning-soft: rgba(245, 158, 11, 0.15);
-            --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
-            --radius: 16px;
-            --nav-height: 68px;
-        }
+<!-- =====================================================================
+     MODULE COMPLET FINTRAX AI (VERSION MISE À JOUR) :
+     - Enveloppes physiques (+ revenu / - dépense, création à la volée, suppression sécurisée)
+     - Saisie vocale intelligente en brouillon (Type, Montant, Portefeuille, Libellé)
+     - Justificatifs optionnels (Photos compressées via Canvas + PDF ≤ 1,5 Mo + bouton Retirer)
+     - Garde-fous (brouillon, Effacer, Réessayer, montant > 0, alerte solde négatif)
+     - Correction (Annuler dernière opération, Éditer, Supprimer + recalcul)
+     - Synchronisation tableau de bord + Export/Import JSON complet
+     ===================================================================== -->
+<section id="fintrackSmartSuite" aria-label="Module intelligent FinTrack AI" style="font-family: system-ui, -apple-system, sans-serif; border: 1px solid #cbd5e1; border-radius: 14px; padding: 18px; margin: 18px 0; background: #ffffff; color: #0f172a; box-sizing: border-box;">
 
-        [data-theme="dark"] {
-            --bg-body: #0b1120;
-            --bg-card: #1e293b;
-            --bg-input: #0f172a;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --primary: #3b82f6;
-            --primary-hover: #60a5fa;
-            --primary-soft: rgba(59, 130, 246, 0.15);
-            --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        body {
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            transition: background-color 0.25s, color 0.25s;
-            padding-bottom: calc(var(--nav-height) + 24px);
-        }
-
-        /* Mode Confidentialité */
-        body.privacy-active .sensitive {
-            filter: blur(7px);
-            user-select: none;
-            transition: filter 0.2s;
-        }
-
-        /* Écran PIN */
-        #pinOverlay {
-            position: fixed;
-            inset: 0;
-            background: var(--bg-body);
-            z-index: 9999;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .pin-dots { display: flex; gap: 14px; margin: 24px 0; }
-        .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--primary); }
-        .pin-dot.filled { background: var(--primary); }
-        .pin-pad { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px; }
-        .pin-btn {
-            height: 72px; border-radius: 50%; border: 1px solid var(--border-color);
-            background: var(--bg-card); color: var(--text-main); font-size: 1.5rem;
-            font-weight: 600; cursor: pointer; transition: 0.15s;
-        }
-        .pin-btn:active { background: var(--primary); color: #fff; }
-
-        /* Header */
-        header {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
-            padding: 14px 20px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.2rem; }
-        .brand-icon {
-            background: var(--primary); color: #fff; width: 36px; height: 36px;
-            border-radius: 10px; display: grid; place-items: center; font-size: 1.25rem;
-        }
-        .header-actions { display: flex; gap: 8px; }
-        .icon-btn {
-            background: var(--bg-input); border: 1px solid var(--border-color);
-            color: var(--text-main); width: 38px; height: 38px; border-radius: 10px;
-            display: grid; place-items: center; cursor: pointer; font-size: 1.2rem;
-            transition: 0.2s;
-        }
-        .icon-btn:hover { border-color: var(--primary); color: var(--primary); }
-
-        /* Container */
-        .container { max-width: 1180px; margin: 0 auto; padding: 18px 16px; }
-
-        /* Filtres temporels 1 clic */
-        .period-bar {
-            display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 18px;
-            scrollbar-width: none;
-        }
-        .period-bar::-webkit-scrollbar { display: none; }
-        .period-pill {
-            padding: 8px 16px; border-radius: 99px; border: 1px solid var(--border-color);
-            background: var(--bg-card); color: var(--text-muted); font-weight: 600;
-            font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: 0.2s;
-        }
-        .period-pill.active {
-            background: var(--primary); color: #fff; border-color: var(--primary);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-        }
-
-        /* Raccourcis intelligents (Favoris 1 clic) */
-        .quick-actions {
-            display: flex; gap: 10px; overflow-x: auto; margin-bottom: 18px; padding-bottom: 4px;
-        }
-        .quick-chip {
-            display: flex; align-items: center; gap: 8px; background: var(--bg-card);
-            border: 1px solid var(--border-color); padding: 8px 14px; border-radius: 12px;
-            cursor: pointer; white-space: nowrap; font-size: 0.85rem; transition: 0.2s;
-            box-shadow: var(--shadow);
-        }
-        .quick-chip:hover { border-color: var(--primary); transform: translateY(-1px); }
-        .quick-chip span.amt { font-weight: 700; color: var(--danger); }
-
-        /* Grille KPI */
-        .kpi-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px; margin-bottom: 20px;
-        }
-        .card {
-            background: var(--bg-card); border-radius: var(--radius); padding: 18px;
-            border: 1px solid var(--border-color); box-shadow: var(--shadow);
-        }
-        .kpi-header { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; }
-        .kpi-val { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.5px; }
-        .kpi-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
-        .text-success { color: var(--success); }
-        .text-danger { color: var(--danger); }
-        .text-warning { color: var(--warning); }
-
-        /* Bandeau Assistant IA (Insights) */
-        .ai-banner {
-            background: linear-gradient(135deg, var(--primary-soft), rgba(16, 185, 129, 0.08));
-            border: 1px solid rgba(37, 99, 235, 0.25);
-            border-radius: var(--radius); padding: 16px; margin-bottom: 20px;
-            display: flex; gap: 14px; align-items: flex-start;
-        }
-        .ai-badge {
-            background: var(--primary); color: #fff; padding: 8px; border-radius: 12px;
-            font-size: 1.3rem; flex-shrink: 0;
-        }
-        .ai-list { list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; line-height: 1.45; }
-
-        /* Portefeuilles */
-        .wallets-row {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 12px; margin-bottom: 20px;
-        }
-        .wallet-card {
-            background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 12px;
-        }
-        .wallet-icon {
-            width: 40px; height: 40px; border-radius: 10px; background: var(--primary-soft);
-            color: var(--primary); display: grid; place-items: center; font-size: 1.25rem;
-        }
-
-        /* Layout 2 colonnes */
-        .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; margin-bottom: 20px; }
-        @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
-
-        .section-title {
-            font-size: 1.05rem; font-weight: 700; margin-bottom: 14px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-
-        /* Graphiques */
-        .chart-box { position: relative; height: 260px; width: 100%; }
-
-        /* Barres de progression Budgets & Objectifs */
-        .progress-item { margin-bottom: 14px; }
-        .progress-top { display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
-        .progress-track { height: 9px; background: var(--bg-input); border-radius: 99px; overflow: hidden; border: 1px solid var(--border-color); }
-        .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
-
-        /* Tableau Comparatif */
-        .comp-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-        .comp-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 10px 8px; border-bottom: 1px solid var(--border-color); }
-        .comp-table td { padding: 11px 8px; border-bottom: 1px solid var(--border-color); }
-        .badge-delta { padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.78rem; }
-
-        /* Liste des transactions */
-        .tx-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 0; border-bottom: 1px solid var(--border-color);
-        }
-        .tx-item:last-child { border-bottom: none; }
-        .tx-left { display: flex; align-items: center; gap: 12px; }
-        .tx-cat-icon {
-            width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
-            font-size: 1.25rem; font-weight: bold;
-        }
-        .tx-title { font-weight: 600; font-size: 0.95rem; }
-        .tx-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
-        .tx-right { text-align: right; display: flex; align-items: center; gap: 10px; }
-        .tx-amount { font-weight: 700; font-size: 0.98rem; }
-
-        /* Heatmap Calendrier */
-        .heatmap-grid {
-            display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px;
-        }
-        .heat-day-label { text-align: center; font-size: 0.75rem; color: var(--text-muted); font-weight: 600; }
-        .heat-cell {
-            aspect-ratio: 1; border-radius: 8px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600;
-            border: 1px solid var(--border-color); cursor: default;
-        }
-
-        /* Navigation Bottom Mobile-First */
-        .bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-height);
-            background: var(--bg-card); border-top: 1px solid var(--border-color);
-            display: flex; justify-content: space-around; align-items: center; z-index: 200;
-            padding: 0 8px;
-        }
-        .nav-item {
-            display: flex; flex-direction: column; align-items: center; gap: 4px;
-            color: var(--text-muted); text-decoration: none; font-size: 0.74rem;
-            font-weight: 600; cursor: pointer; border: none; background: none; padding: 6px 10px;
-        }
-        .nav-item i { font-size: 1.35rem; }
-        .nav-item.active { color: var(--primary); }
-        .nav-fab {
-            width: 52px; height: 52px; border-radius: 50%; background: var(--primary);
-            color: #fff; border: none; display: grid; place-items: center; font-size: 1.6rem;
-            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4); cursor: pointer;
-            transform: translateY(-10px); transition: 0.2s;
-        }
-        .nav-fab:active { transform: translateY(-8px) scale(0.95); }
-
-        /* Vues (Onglets) */
-        .view-section { display: none; animation: fadeIn 0.2s ease; }
-        .view-section.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* Modal Saisie */
-        .modal-backdrop {
-            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(3px); z-index: 500; display: none;
-            align-items: flex-end; justify-content: center;
-        }
-        @media (min-width: 640px) { .modal-backdrop { align-items: center; } }
-        .modal-backdrop.open { display: flex; }
-        .modal-sheet {
-            background: var(--bg-card); width: 100%; max-width: 480px;
-            border-radius: 22px 22px 0 0; padding: 22px; max-height: 92vh; overflow-y: auto;
-        }
-        @media (min-width: 640px) { .modal-sheet { border-radius: 22px; } }
-
-        .type-switch {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-            background: var(--bg-input); padding: 5px; border-radius: 12px; margin-bottom: 16px;
-        }
-        .type-btn {
-            padding: 9px; border: none; border-radius: 9px; font-weight: 700;
-            font-size: 0.85rem; cursor: pointer; background: transparent; color: var(--text-muted);
-        }
-        .type-btn.active[data-type="depense"] { background: var(--danger); color: #fff; }
-        .type-btn.active[data-type="revenu"] { background: var(--success); color: #fff; }
-        .type-btn.active[data-type="virement"] { background: var(--primary); color: #fff; }
-
-        .form-group { margin-bottom: 14px; }
-        .form-label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
-        .form-control {
-            width: 100%; padding: 11px 14px; border-radius: 12px;
-            border: 1px solid var(--border-color); background: var(--bg-input);
-            color: var(--text-main); font-size: 0.95rem; outline: none;
-        }
-        .form-control:focus { border-color: var(--primary); }
-        .input-with-btn { display: flex; gap: 8px; }
-        .btn-primary {
-            width: 100%; padding: 13px; border-radius: 12px; border: none;
-            background: var(--primary); color: #fff; font-weight: 700; font-size: 1rem;
-            cursor: pointer; transition: 0.2s;
-        }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-outline {
-            padding: 9px 14px; border-radius: 10px; border: 1px solid var(--border-color);
-            background: var(--bg-card); color: var(--text-main); font-weight: 600;
-            font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-        }
-
-        /* Toast notification */
-        #toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 99px;
-            font-size: 0.88rem; font-weight: 600; z-index: 1000; display: none;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Écran de verrouillage PIN -->
-    <div id="pinOverlay">
-        <div class="brand-icon" style="width:54px;height:54px;font-size:1.8rem;margin-bottom:12px;"><i class="ph ph-lock-key"></i></div>
-        <h2 style="margin-bottom:4px;">FinTrack Sécurisé</h2>
-        <p style="color:var(--text-muted);font-size:0.9rem;" id="pinMessage">Entrez votre code PIN à 4 chiffres</p>
-        <div class="pin-dots" id="pinDots">
-            <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
-        </div>
-        <div class="pin-pad">
-            <button class="pin-btn" onclick="enterPin('1')">1</button>
-            <button class="pin-btn" onclick="enterPin('2')">2</button>
-            <button class="pin-btn" onclick="enterPin('3')">3</button>
-            <button class="pin-btn" onclick="enterPin('4')">4</button>
-            <button class="pin-btn" onclick="enterPin('5')">5</button>
-            <button class="pin-btn" onclick="enterPin('6')">6</button>
-            <button class="pin-btn" onclick="enterPin('7')">7</button>
-            <button class="pin-btn" onclick="enterPin('8')">8</button>
-            <button class="pin-btn" onclick="enterPin('9')">9</button>
-            <button class="pin-btn" onclick="clearPin()" style="font-size:1rem;">Effacer</button>
-            <button class="pin-btn" onclick="enterPin('0')">0</button>
-            <button class="pin-btn" onclick="backspacePin()"><i class="ph ph-backspace"></i></button>
-        </div>
+  <!-- 1. ENVELOPPES PHYSIQUES, CRÉATION À LA VOLÉE & SUPPRESSION SÉCURISÉE -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+    <div>
+      <h3 style="margin: 0; font-size: 1.05rem;">Enveloppes physiques</h3>
+      <small style="color: #64748b;">Chaque revenu alimente (+) l'enveloppe choisie ; chaque dépense en est déduite (-).</small>
     </div>
 
-    <div id="toast"></div>
+    <!-- Formulaire de création rapide d'une nouvelle enveloppe -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+      <input
+        type="text"
+        id="ftNewEnvName"
+        placeholder="Ex: Poche, Coffre, Carburant..."
+        style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;"
+      />
+      <input
+        type="number"
+        id="ftNewEnvInitial"
+        step="any"
+        value="0"
+        placeholder="Solde initial"
+        style="width: 115px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;"
+      />
+      <button
+        type="button"
+        id="ftBtnAddEnv"
+        style="padding: 8px 14px; border: none; border-radius: 8px; background: #0f172a; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
+      >
+        + Créer enveloppe
+      </button>
+    </div>
+  </div>
 
-    <!-- En-tête -->
-    <header>
-        <div class="brand">
-            <div class="brand-icon"><i class="ph ph-chart-polar"></i></div>
-            <span>FinTrack <span style="color:var(--primary)">AI</span></span>
-        </div>
-        <div class="header-actions">
-            <button class="icon-btn" onclick="togglePrivacy()" title="Masquer/Afficher les montants"><i class="ph ph-eye" id="privacyIcon"></i></button>
-            <button class="icon-btn" onclick="toggleTheme()" title="Mode Clair / Sombre"><i class="ph ph-moon" id="themeIcon"></i></button>
-            <button class="icon-btn" onclick="exportCSV()" title="Exporter vers Excel (.csv)"><i class="ph ph-file-xls"></i></button>
-        </div>
-    </header>
+  <!-- Grille d'affichage en direct des enveloppes, de leurs soldes et de la suppression sécurisée -->
+  <div id="ftEnvelopesCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 10px; margin-bottom: 16px;"></div>
 
-    <div class="container">
-        <!-- Filtres temporels en 1 clic -->
-        <div class="period-bar" id="periodBar">
-            <button class="period-pill" data-period="day" onclick="setPeriod('day')">Aujourd'hui</button>
-            <button class="period-pill" data-period="week" onclick="setPeriod('week')">Cette semaine</button>
-            <button class="period-pill active" data-period="month" onclick="setPeriod('month')">Ce mois</button>
-            <button class="period-pill" data-period="year" onclick="setPeriod('year')">Cette année</button>
-            <button class="period-pill" data-period="all" onclick="setPeriod('all')">Tout l'historique</button>
-        </div>
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
 
-        <!-- ==================== VUE 1 : TABLEAU DE BORD ==================== -->
-        <section id="view-dashboard" class="view-section active">
-            <!-- Raccourcis intelligents (Apprentissage des habitudes) -->
-            <div class="quick-actions" id="quickActionsBar"></div>
-
-            <!-- Bandeau Insights IA -->
-            <div class="ai-banner">
-                <div class="ai-badge"><i class="ph ph-sparkle"></i></div>
-                <div style="flex:1;">
-                    <div style="font-weight:700;font-size:0.92rem;margin-bottom:4px;">Analyse intelligente en direct</div>
-                    <ul class="ai-list" id="aiInsightsList"></ul>
-                </div>
-            </div>
-
-            <!-- 4 KPI Principaux -->
-            <div class="kpi-grid">
-                <div class="card">
-                    <div class="kpi-header"><span>TRÉSORERIE TOTALE</span><i class="ph ph-vault text-primary"></i></div>
-                    <div class="kpi-val sensitive" id="kpiNetCash">0 F</div>
-                    <div class="kpi-sub" id="kpiAutonomy">Autonomie : calcul...</div>
-                </div>
-                <div class="card">
-                    <div class="kpi-header"><span id="lblPeriodFlow">FLUX DE LA PÉRIODE</span><i class="ph ph-arrows-left-right"></i></div>
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;">
-                        <div>
-                            <span style="font-size:0.75rem;color:var(--text-muted);">Revenus</span>
-                            <div class="text-success sensitive" style="font-weight:800;font-size:1.15rem;" id="kpiIncome">0 F</div>
-                        </div>
-                        <div style="text-align:right;">
-                            <span style="font-size:0.75rem;color:var(--text-muted);">Dépenses</span>
-                            <div class="text-danger sensitive" style="font-weight:800;font-size:1.15rem;" id="kpiExpense">0 F</div>
-                        </div>
-                    </div>
-                    <div class="kpi-sub" id="kpiSavingsRate">Taux d'épargne : 0 %</div>
-                </div>
-                <div class="card">
-                    <div class="kpi-header"><span>RESTE À VIVRE / JOUR</span><i class="ph ph-calendar-check text-success"></i></div>
-                    <div class="kpi-val sensitive" id="kpiDailyAllowance">0 F</div>
-                    <div class="kpi-sub" id="kpiDailyAvg">Moyenne dépensée : 0 F/jour</div>
-                </div>
-                <div class="card">
-                    <div class="kpi-header"><span>SCORE DE SANTÉ</span><i class="ph ph-heartbeat text-danger"></i></div>
-                    <div class="kpi-val" id="kpiHealthScore">-- / 100</div>
-                    <div class="kpi-sub" id="kpiHealthLabel">Évaluation de votre équilibre</div>
-                </div>
-            </div>
-
-            <!-- Multi-portefeuilles -->
-            <div class="wallets-row" id="walletsRow"></div>
-
-            <!-- Graphiques principaux -->
-            <div class="grid-2">
-                <div class="card">
-                    <div class="section-title">
-                        <span>Évolution Revenus vs Dépenses</span>
-                        <span style="font-size:0.78rem;color:var(--text-muted);" id="chartPeriodTag">Ce mois</span>
-                    </div>
-                    <div class="chart-box"><canvas id="trendChart"></canvas></div>
-                </div>
-                <div class="card">
-                    <div class="section-title"><span>Répartition par Catégorie</span></div>
-                    <div class="chart-box"><canvas id="categoryChart"></canvas></div>
-                </div>
-            </div>
-
-            <!-- Plafonds Budgétaires & Dernières Opérations -->
-            <div class="grid-2">
-                <div class="card">
-                    <div class="section-title">
-                        <span>Suivi des Plafonds Mensuels</span>
-                        <button class="btn-outline" onclick="switchView('tools')"><i class="ph ph-sliders"></i> Gérer</button>
-                    </div>
-                    <div id="budgetBarsContainer"></div>
-                </div>
-                <div class="card">
-                    <div class="section-title">
-                        <span>Dernières opérations</span>
-                        <button class="btn-outline" onclick="switchView('history')">Voir tout</button>
-                    </div>
-                    <div id="recentTxContainer"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ==================== VUE 2 : HISTORIQUE COMPLET ==================== -->
-        <section id="view-history" class="view-section">
-            <div class="card">
-                <div class="section-title" style="flex-wrap:wrap;gap:10px;">
-                    <span>Historique des opérations</span>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <input type="text" id="searchInput" class="form-control" placeholder="Rechercher un libellé..." style="width:200px;padding:8px 12px;" oninput="renderHistory()">
-                        <select id="filterCatSelect" class="form-control" style="width:160px;padding:8px 12px;" onchange="renderHistory()">
-                            <option value="ALL">Toutes catégories</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="fullHistoryContainer"></div>
-            </div>
-        </section>
-
-        <!-- ==================== VUE 3 : ANALYSES & COMPARATEUR ==================== -->
-        <section id="view-analytics" class="view-section">
-            <div class="grid-2">
-                <div class="card">
-                    <div class="section-title">
-                        <span>Comparateur Période vs Précédente</span>
-                        <select id="compModeSelect" class="form-control" style="width:auto;padding:6px 10px;font-size:0.82rem;" onchange="renderComparison()">
-                            <option value="month">Ce mois vs Mois dernier</option>
-                            <option value="week">Cette semaine vs Semaine dernière</option>
-                            <option value="year">Cette année vs Année dernière</option>
-                        </select>
-                    </div>
-                    <div style="overflow-x:auto;">
-                        <table class="comp-table">
-                            <thead>
-                                <tr>
-                                    <th>Catégorie</th>
-                                    <th>Actuel</th>
-                                    <th>Précédent</th>
-                                    <th>Évolution</th>
-                                </tr>
-                            </thead>
-                            <tbody id="compTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="section-title"><span>Calendrier Thermique (Intensité du mois)</span></div>
-                    <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">Repérez visuellement les jours où vos dépenses sont les plus élevées.</p>
-                    <div class="heatmap-grid" id="heatmapContainer"></div>
-                </div>
-            </div>
-
-            <!-- Simulateur "Et si ?" -->
-            <div class="card">
-                <div class="section-title"><span><i class="ph ph-magic-wand text-primary"></i> Simulateur d'Épargne « Et si ? »</span></div>
-                <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:14px;">
-                    Testez l'impact d'une réduction de vos dépenses variables sur votre trésorerie future.
-                </p>
-                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-                    <div style="flex:1;min-width:240px;">
-                        <label class="form-label">Réduire mes dépenses de : <strong id="simPctLabel" class="text-primary">15 %</strong></label>
-                        <input type="range" id="simSlider" min="5" max="50" step="5" value="15" style="width:100%;" oninput="updateSimulator()">
-                    </div>
-                    <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                        <div class="card" style="padding:12px 16px;background:var(--bg-input);">
-                            <div style="font-size:0.75rem;color:var(--text-muted);">Gain dans 3 mois</div>
-                            <div class="text-success sensitive" style="font-weight:800;font-size:1.1rem;" id="sim3m">0 F</div>
-                        </div>
-                        <div class="card" style="padding:12px 16px;background:var(--bg-input);">
-                            <div style="font-size:0.75rem;color:var(--text-muted);">Gain dans 1 an</div>
-                            <div class="text-success sensitive" style="font-weight:800;font-size:1.1rem;" id="sim12m">0 F</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ==================== VUE 4 : OUTILS, BUDGETS & SAUVEGARDE ==================== -->
-        <section id="view-tools" class="view-section">
-            <div class="grid-2">
-                <!-- Échéancier Charges Fixes -->
-                <div class="card">
-                    <div class="section-title">
-                        <span>Charges Fixes & Échéances</span>
-                        <button class="btn-outline" onclick="addRecurringPrompt()"><i class="ph ph-plus"></i> Ajouter</button>
-                    </div>
-                    <div id="recurringList"></div>
-                </div>
-
-                <!-- Objectifs d'épargne (Tirelires) -->
-                <div class="card">
-                    <div class="section-title">
-                        <span>Objectifs d'Épargne (Tirelires)</span>
-                        <button class="btn-outline" onclick="addGoalPrompt()"><i class="ph ph-plus"></i> Nouveau projet</button>
-                    </div>
-                    <div id="goalsList"></div>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <!-- Paramétrage des plafonds par catégorie -->
-                <div class="card">
-                    <div class="section-title"><span>Plafonds Mensuels par Catégorie</span></div>
-                    <div id="budgetSettingsList"></div>
-                </div>
-
-                <!-- Sécurité & Sauvegarde -->
-                <div class="card">
-                    <div class="section-title"><span>Sécurité & Sauvegarde des Données</span></div>
-                    <div style="display:flex;flex-direction:column;gap:12px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg-input);border-radius:12px;">
-                            <div>
-                                <div style="font-weight:600;font-size:0.9rem;">Verrouillage par Code PIN</div>
-                                <div style="font-size:0.78rem;color:var(--text-muted);">Protège l'ouverture du fichier HTML</div>
-                            </div>
-                            <button class="btn-outline" id="pinToggleBtn" onclick="configurePin()">Activer PIN</button>
-                        </div>
-
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg-input);border-radius:12px;">
-                            <div>
-                                <div style="font-weight:600;font-size:0.9rem;">Devise d'affichage</div>
-                                <div style="font-size:0.78rem;color:var(--text-muted);">Symbole monétaire utilisé</div>
-                            </div>
-                            <select id="currencySelect" class="form-control" style="width:110px;padding:6px;" onchange="changeCurrency(this.value)">
-                                <option value="FCFA">FCFA</option>
-                                <option value="€">Euro (€)</option>
-                                <option value="$">Dollar ($)</option>
-                            </select>
-                        </div>
-
-                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
-                            <button class="btn-outline" style="flex:1;" onclick="exportJSON()"><i class="ph ph-download-simple"></i> Sauvegarder (.json)</button>
-                            <label class="btn-outline" style="flex:1;justify-content:center;cursor:pointer;">
-                                <i class="ph ph-upload-simple"></i> Restaurer (.json)
-                                <input type="file" accept=".json" style="display:none;" onchange="importJSON(event)">
-                            </label>
-                        </div>
-                        <button class="btn-outline" style="color:var(--danger);border-color:var(--danger-soft);" onclick="resetDemoData()">
-                            <i class="ph ph-arrow-counter-clockwise"></i> Charger des données de démonstration
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
+  <!-- 2. BARRE DE CONTRÔLE DU BROUILLON & SAISIE VOCALE -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+      <button
+        type="button"
+        id="ftBtnVoiceStart"
+        style="padding: 8px 13px; border: none; border-radius: 8px; background: #dc2626; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
+      >
+        🎤 Saisie vocale
+      </button>
+      <button
+        type="button"
+        id="ftBtnVoiceRetry"
+        style="padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #0f172a; cursor: pointer; font-size: 0.88rem;"
+      >
+        ↻ Réessayer
+      </button>
+      <button
+        type="button"
+        id="ftBtnDraftClear"
+        style="padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #0f172a; cursor: pointer; font-size: 0.88rem;"
+      >
+        ✕ Effacer
+      </button>
     </div>
 
-    <!-- Barre de navigation inférieure (Mobile-First) -->
-    <nav class="bottom-nav">
-        <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
-            <i class="ph ph-squares-four"></i><span>Accueil</span>
-        </button>
-        <button class="nav-item" data-view="history" onclick="switchView('history')">
-            <i class="ph ph-list-dashes"></i><span>Historique</span>
-        </button>
-        <button class="nav-fab" onclick="openTxModal()" title="Nouvelle opération">
-            <i class="ph ph-plus"></i>
-        </button>
-        <button class="nav-item" data-view="analytics" onclick="switchView('analytics')">
-            <i class="ph ph-chart-line-up"></i><span>Comparer</span>
-        </button>
-        <button class="nav-item" data-view="tools" onclick="switchView('tools')">
-            <i class="ph ph-briefcase"></i><span>Outils</span>
-        </button>
-    </nav>
+    <!-- Indicateur visuel de l'état du brouillon (Nouvelle saisie vs Modification) -->
+    <span
+      id="ftDraftBadge"
+      style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8;"
+    >
+      Brouillon : Nouvelle opération
+    </span>
+  </div>
 
-    <!-- Modale d'ajout d'opération -->
-    <div class="modal-backdrop" id="txModal" onclick="if(event.target===this) closeTxModal()">
-        <div class="modal-sheet">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                <h3 style="font-size:1.15rem;">Nouvelle opération</h3>
-                <button class="icon-btn" onclick="closeTxModal()"><i class="ph ph-x"></i></button>
-            </div>
+  <!-- Zone de retour vocal / statut du brouillon (jamais enregistrée sans clic sur Enregistrer) -->
+  <div
+    id="ftVoiceFeedback"
+    style="font-size: 0.86rem; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; padding: 9px 12px; border-radius: 8px; margin-bottom: 12px;"
+  >
+    Aucun enregistrement tant que tu ne cliques pas sur « Enregistrer l'opération ».
+  </div>
 
-            <div class="type-switch">
-                <button class="type-btn active" data-type="depense" onclick="setTxType('depense')">Dépense</button>
-                <button class="type-btn" data-type="revenu" onclick="setTxType('revenu')">Revenu</button>
-                <button class="type-btn" data-type="virement" onclick="setTxType('virement')">Virement</button>
-            </div>
-
-            <form id="txForm" onsubmit="saveTransaction(event)">
-                <div class="form-group">
-                    <label class="form-label">Montant (calculatrice intégrée : ex. 2500 + 1500)</label>
-                    <div class="input-with-btn">
-                        <input type="text" id="txAmount" class="form-control" placeholder="0" required inputmode="decimal" style="font-size:1.25rem;font-weight:800;">
-                        <button type="button" class="icon-btn" style="width:48px;height:48px;" onclick="startVoiceInput()" title="Saisie vocale"><i class="ph ph-microphone"></i></button>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Libellé / Description (auto-catégorisation intelligente)</label>
-                    <input type="text" id="txLabel" class="form-control" placeholder="Ex: Carburant, Courses marché, Salaire..." required oninput="smartAutoCategorize(this.value)">
-                </div>
-
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="catRow">
-                    <div class="form-group">
-                        <label class="form-label">Catégorie</label>
-                        <select id="txCategory" class="form-control" onchange="updateSubcategories()"></select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Sous-catégorie</label>
-                        <select id="txSubcategory" class="form-control"></select>
-                    </div>
-                </div>
-
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                    <div class="form-group">
-                        <label class="form-label" id="walletFromLabel">Compte / Portefeuille</label>
-                        <select id="txWallet" class="form-control">
-                            <option value="Espèces">Espèces</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                            <option value="Banque">Banque</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="walletToGroup" style="display:none;">
-                        <label class="form-label">Vers le compte</label>
-                        <select id="txWalletTo" class="form-control">
-                            <option value="Espèces">Espèces</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                            <option value="Banque">Banque</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="dateGroup">
-                        <label class="form-label">Date</label>
-                        <input type="date" id="txDate" class="form-control" required>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn-primary" style="margin-top:6px;">Enregistrer l'opération</button>
-            </form>
-        </div>
+  <!-- 3. CHAMPS DU BROUILLON (TYPE, MONTANT, PORTEFEUILLE, ENVELOPPE, LIBELLÉ) -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+    <div>
+      <label for="ftInputType" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Type d'opération
+      </label>
+      <select id="ftInputType" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;">
+        <option value="expense">Dépense (- enveloppe)</option>
+        <option value="income">Revenu (+ enveloppe)</option>
+      </select>
     </div>
 
-    <script>
-        // ==================== CONFIGURATION & DONNÉES INITIALES ====================
-        const CATEGORIES = {
-            depense: {
-                "Alimentation": { icon: "ph-fork-knife", color: "#f97316", subs: ["Courses / Marché", "Restaurant / Fast-food", "Eau & Boissons"] },
-                "Transport": { icon: "ph-car", color: "#3b82f6", subs: ["Carburant", "Entretien / Réparation", "Taxi / Zémidjan", "Assurance / Visite"] },
-                "Logement & Factures": { icon: "ph-house-line", color: "#8b5cf6", subs: ["Loyer", "Électricité (SBEE)", "Eau", "Internet / Téléphone"] },
-                "Études & Pro": { icon: "ph-graduation-cap", color: "#06b6d4", subs: ["Fournitures / Livres", "Frais universitaires", "Logiciels / Outils"] },
-                "Santé & Bien-être": { icon: "ph-first-aid", color: "#ef4444", subs: ["Pharmacie", "Consultation", "Sport / Soins"] },
-                "Loisirs & Sorties": { icon: "ph-confetti", color: "#ec4899", subs: ["Sorties / Plage", "Cadeaux", "Abonnements"] },
-                "Divers & Imprévus": { icon: "ph-dots-three-circle", color: "#64748b", subs: ["Dépannage", "Frais bancaires", "Autre"] }
-            },
-            revenu: {
-                "Revenus Principaux": { icon: "ph-briefcase", color: "#10b981", subs: ["Salaire", "Allocation / Bourse", "Honoraires"] },
-                "Activités Annexes": { icon: "ph-trend-up", color: "#14b8a6", subs: ["Prestation / Freelance", "Commerce / Vente", "Commission"] },
-                "Autres Entrées": { icon: "ph-gift", color: "#22c55e", subs: ["Remboursement", "Cadeau reçu", "Tontine"] }
-            }
+    <div>
+      <label for="ftInputAmount" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Montant
+      </label>
+      <input
+        type="number"
+        id="ftInputAmount"
+        step="any"
+        min="0"
+        placeholder="Ex: 5000"
+        style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;"
+      />
+    </div>
+
+    <div>
+      <label for="ftInputWallet" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Portefeuille (détecté à la voix)
+      </label>
+      <select id="ftInputWallet" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;">
+        <option value="Espèces">Espèces</option>
+        <option value="Mobile Money">Mobile Money</option>
+        <option value="Banque">Banque</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="ftInputEnvelope" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Enveloppe physique
+      </label>
+      <select id="ftInputEnvelope" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;"></select>
+    </div>
+
+    <div>
+      <label for="ftInputLabel" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Libellé / Motif
+      </label>
+      <input
+        type="text"
+        id="ftInputLabel"
+        placeholder="Ex: Transport, Salaire..."
+        style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;"
+      />
+    </div>
+  </div>
+
+  <!-- 4. JUSTIFICATIF OPTIONNEL (PHOTO COMPRESSÉE OU PDF + RETRAIT INDIVIDUEL) -->
+  <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
+    <div>
+      <label for="ftInputReceipt" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
+        Justificatif optionnel (Photo compressée ou PDF ≤ 1,5 Mo)
+      </label>
+      <input
+        type="file"
+        id="ftInputReceipt"
+        accept="image/*,application/pdf"
+        capture="environment"
+        style="font-size: 0.85rem;"
+      />
+    </div>
+    <div id="ftReceiptPreviewBox" style="font-size: 0.84rem; color: #334155;"></div>
+  </div>
+
+  <!-- 5. ZONE DE GARDE-FOUS (ERREURS BLOQUANTES OU ALERTE SOLDE NÉGATIF) -->
+  <div
+    id="ftGuardAlert"
+    role="alert"
+    style="display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 0.88rem; font-weight: 500;"
+  ></div>
+
+  <!-- 6. BOUTONS DE VALIDATION, ANNULATION DE MODIFICATION ET ANNULATION RAPIDE -->
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
+    <button
+      type="button"
+      id="ftBtnSaveOperation"
+      style="padding: 10px 16px; border: none; border-radius: 8px; background: #16a34a; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.92rem;"
+    >
+      Enregistrer l'opération
+    </button>
+
+    <button
+      type="button"
+      id="ftBtnCancelEdit"
+      style="display: none; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #0f172a; cursor: pointer; font-size: 0.9rem;"
+    >
+      Annuler la modification
+    </button>
+
+    <button
+      type="button"
+      id="ftBtnUndoLastOp"
+      style="display: none; padding: 10px 14px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
+    >
+      ↶ Annuler la dernière opération
+    </button>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 18px 0;" />
+
+  <!-- 7. HISTORIQUE DES OPÉRATIONS (JUSTIFICATIF, ÉDITION, SUPPRESSION) -->
+  <div>
+    <h4 style="margin: 0 0 10px 0; font-size: 0.98rem;">
+      Historique des opérations (modification et suppression avec recalcul automatique)
+    </h4>
+    <div id="ftHistoryList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  // --- Clés de stockage local (localStorage) ---
+  const STORAGE_KEYS = {
+    envelopes: 'fintrack_smart_envelopes_v1',
+    operations: 'fintrack_smart_ops_v1',
+    lastEnvelopeId: 'fintrack_last_envelope_id'
+  };
+
+  // --- État de l'application dans le module ---
+  let envelopes = loadJsonArray(STORAGE_KEYS.envelopes);
+  if (envelopes.length === 0) {
+    // Enveloppe par défaut pour éviter toute friction au premier démarrage
+    envelopes = [{ id: 'env-default-portefeuille', name: 'Portefeuille', balance: 0 }];
+  }
+
+  let operations = loadJsonArray(STORAGE_KEYS.operations);
+  let draftAttachment = null;        // { name, type: 'image'|'pdf', data: 'data:...' }
+  let editingOperationId = null;     // ID de l'opération en cours d'édition, ou null
+  let lastCreatedOperationId = null; // ID de la dernière opération ajoutée (pour annulation rapide)
+  let awaitingNegativeConfirm = false; // Passe à true après un premier avertissement de solde négatif
+
+  // --- Références DOM ---
+  const dom = {
+    newEnvName: document.getElementById('ftNewEnvName'),
+    newEnvInitial: document.getElementById('ftNewEnvInitial'),
+    btnAddEnv: document.getElementById('ftBtnAddEnv'),
+    envelopesCards: document.getElementById('ftEnvelopesCards'),
+
+    btnVoiceStart: document.getElementById('ftBtnVoiceStart'),
+    btnVoiceRetry: document.getElementById('ftBtnVoiceRetry'),
+    btnDraftClear: document.getElementById('ftBtnDraftClear'),
+    draftBadge: document.getElementById('ftDraftBadge'),
+    voiceFeedback: document.getElementById('ftVoiceFeedback'),
+
+    inputType: document.getElementById('ftInputType'),
+    inputAmount: document.getElementById('ftInputAmount'),
+    inputWallet: document.getElementById('ftInputWallet'),
+    inputEnvelope: document.getElementById('ftInputEnvelope'),
+    inputLabel: document.getElementById('ftInputLabel'),
+
+    inputReceipt: document.getElementById('ftInputReceipt'),
+    receiptPreviewBox: document.getElementById('ftReceiptPreviewBox'),
+
+    guardAlert: document.getElementById('ftGuardAlert'),
+    btnSaveOperation: document.getElementById('ftBtnSaveOperation'),
+    btnCancelEdit: document.getElementById('ftBtnCancelEdit'),
+    btnUndoLastOp: document.getElementById('ftBtnUndoLastOp'),
+
+    historyList: document.getElementById('ftHistoryList')
+  };
+
+  // --- Utilitaires ---
+  function loadJsonArray(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text ?? '').replace(/[&<>"']/g, function (char) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return map[char] || char;
+    });
+  }
+
+  function formatNumber(num) {
+    const n = Number(num) || 0;
+    return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  }
+
+  // --- Messages de garde-fou ---
+  function showGuardAlert(message, isBlockingError) {
+    dom.guardAlert.style.display = 'block';
+    if (isBlockingError) {
+      dom.guardAlert.style.background = '#fef2f2';
+      dom.guardAlert.style.color = '#991b1b';
+      dom.guardAlert.style.border = '1px solid #fecaca';
+    } else {
+      dom.guardAlert.style.background = '#fffbeb';
+      dom.guardAlert.style.color = '#92400e';
+      dom.guardAlert.style.border = '1px solid #fde68a';
+    }
+    dom.guardAlert.textContent = message;
+  }
+
+  function hideGuardAlert() {
+    dom.guardAlert.style.display = 'none';
+    dom.guardAlert.textContent = '';
+  }
+
+  // --- Sauvegarde locale, rendu & hook de synchronisation ---
+  function persistAndRender() {
+    localStorage.setItem(STORAGE_KEYS.envelopes, JSON.stringify(envelopes));
+    localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(operations));
+
+    renderEnvelopesCards();
+    renderEnvelopeSelect();
+    renderHistoryList();
+
+    dom.btnUndoLastOp.style.display = lastCreatedOperationId ? 'inline-block' : 'none';
+
+    // Notifie les autres parties de FinTrack AI si le hook est défini
+    if (typeof window.onFinTrackSmartUpdate === 'function') {
+      window.onFinTrackSmartUpdate({
+        envelopes: envelopes.slice(),
+        operations: operations.slice()
+      });
+    }
+  }
+
+  // --- Gestion des enveloppes physiques (création + suppression sécurisée) ---
+  function createEnvelope(name, initialBalance) {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      showGuardAlert('Veuillez saisir un nom pour la nouvelle enveloppe.', true);
+      return null;
+    }
+
+    const parsedInit = parseFloat(initialBalance);
+    const startBalance = Number.isFinite(parsedInit) ? Number(parsedInit.toFixed(2)) : 0;
+
+    const newEnv = {
+      id: 'env-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      name: cleanName,
+      balance: startBalance
+    };
+
+    envelopes.push(newEnv);
+    localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, newEnv.id);
+    hideGuardAlert();
+    persistAndRender();
+    dom.inputEnvelope.value = newEnv.id;
+    return newEnv;
+  }
+
+  // Suppression sécurisée : interdit si dernière enveloppe ou si des opérations y sont liées
+  window.ftDeleteEnvelope = function (envId) {
+    hideGuardAlert();
+
+    if (envelopes.length <= 1) {
+      showGuardAlert('Suppression impossible : garde au moins une enveloppe active.', true);
+      return;
+    }
+
+    const hasLinkedOperations = operations.some(function (op) {
+      return op.envelopeId === envId;
+    });
+
+    if (hasLinkedOperations) {
+      showGuardAlert(
+        'Suppression impossible : cette enveloppe contient déjà des opérations. Supprime ou déplace d\'abord ses opérations.',
+        true
+      );
+      return;
+    }
+
+    const targetEnv = envelopes.find(function (e) { return e.id === envId; });
+    envelopes = envelopes.filter(function (e) { return e.id !== envId; });
+
+    if (localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) === envId) {
+      localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, envelopes[0].id);
+    }
+
+    if (dom.inputEnvelope.value === envId) {
+      dom.inputEnvelope.value = envelopes[0].id;
+    }
+
+    persistAndRender();
+    dom.voiceFeedback.textContent =
+      'Enveloppe « ' + (targetEnv ? targetEnv.name : '') + ' » supprimée en toute sécurité.';
+  };
+
+  // Applique une variation (+ pour revenu, - pour dépense) à une enveloppe
+  function adjustEnvelopeBalance(envelopeId, delta) {
+    const env = envelopes.find(function (item) {
+      return item.id === envelopeId;
+    });
+    if (!env) return;
+    env.balance = Number(((Number(env.balance) || 0) + (Number(delta) || 0)).toFixed(2));
+  }
+
+  function renderEnvelopesCards() {
+    if (!envelopes.length) {
+      dom.envelopesCards.innerHTML = '<div style="color:#64748b; font-size:0.88rem;">Aucune enveloppe disponible.</div>';
+      return;
+    }
+
+    const canDeleteAny = envelopes.length > 1;
+
+    dom.envelopesCards.innerHTML = envelopes.map(function (env) {
+      const bal = Number(env.balance) || 0;
+      const color = bal < 0 ? '#dc2626' : '#15803d';
+      const hasOps = operations.some(function (op) { return op.envelopeId === env.id; });
+      const deleteBtnDisabled = !canDeleteAny || hasOps;
+      const deleteTitle = !canDeleteAny
+        ? 'Dernière enveloppe : suppression désactivée'
+        : (hasOps ? 'Enveloppe utilisée par des opérations' : 'Supprimer cette enveloppe');
+
+      return (
+        '<div style="border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; background:#f8fafc; display:flex; flex-direction:column; justify-content:space-between; gap:6px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">' +
+            '<span style="font-size:0.84rem; font-weight:600; color:#334155; word-break:break-word;">' +
+              escapeHtml(env.name) +
+            '</span>' +
+            '<button type="button" onclick="ftDeleteEnvelope(\'' + escapeHtml(env.id) + '\')" ' +
+              (deleteBtnDisabled ? 'disabled ' : '') +
+              'title="' + escapeHtml(deleteTitle) + '" ' +
+              'style="border:1px solid ' + (deleteBtnDisabled ? '#e2e8f0' : '#fecaca') + '; background:' + (deleteBtnDisabled ? '#f1f5f9' : '#fef2f2') + '; color:' + (deleteBtnDisabled ? '#94a3b8' : '#b91c1c') + '; border-radius:6px; padding:2px 6px; font-size:0.75rem; cursor:' + (deleteBtnDisabled ? 'not-allowed' : 'pointer') + ';">' +
+              '✕' +
+            '</button>' +
+          '</div>' +
+          '<div style="font-size:1.08rem; font-weight:700; color:' + color + ';">' +
+            formatNumber(bal) +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function renderEnvelopeSelect() {
+    const preferredId =
+      dom.inputEnvelope.value ||
+      localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) ||
+      (envelopes[0] ? envelopes[0].id : '');
+
+    dom.inputEnvelope.innerHTML = envelopes.map(function (env) {
+      return (
+        '<option value="' + escapeHtml(env.id) + '">' +
+          escapeHtml(env.name) + ' (' + formatNumber(env.balance) + ')' +
+        '</option>'
+      );
+    }).join('');
+
+    if (preferredId && envelopes.some(function (e) { return e.id === preferredId; })) {
+      dom.inputEnvelope.value = preferredId;
+    }
+  }
+
+  // --- Gestion du brouillon ---
+  function clearDraft(keepVoiceMessage) {
+    editingOperationId = null;
+    awaitingNegativeConfirm = false;
+
+    dom.inputType.value = 'expense';
+    dom.inputAmount.value = '';
+    dom.inputWallet.value = 'Espèces';
+    dom.inputLabel.value = '';
+    dom.inputReceipt.value = '';
+    draftAttachment = null;
+    renderAttachmentPreview(null);
+
+    dom.draftBadge.textContent = 'Brouillon : Nouvelle opération';
+    dom.draftBadge.style.background = '#eff6ff';
+    dom.draftBadge.style.color = '#1d4ed8';
+    dom.btnCancelEdit.style.display = 'none';
+
+    renderEnvelopeSelect();
+    hideGuardAlert();
+
+    if (!keepVoiceMessage) {
+      dom.voiceFeedback.textContent = 'Brouillon effacé. Aucune donnée n\'a été enregistrée.';
+    }
+  }
+
+  // --- Enregistrement (création ou mise à jour) avec garde-fous ---
+  function saveOperationFromDraft() {
+    hideGuardAlert();
+
+    const type = dom.inputType.value === 'income' ? 'income' : 'expense';
+    const amount = parseFloat(dom.inputAmount.value);
+    const wallet = dom.inputWallet.value || 'Espèces';
+    const envelopeId = dom.inputEnvelope.value;
+    const rawLabel = String(dom.inputLabel.value || '').trim();
+    const label = rawLabel || (type === 'income' ? 'Revenu' : 'Dépense');
+
+    // Garde-fou 1 : montant strictement positif
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showGuardAlert('Erreur : le montant doit être un nombre supérieur à 0.', true);
+      return;
+    }
+
+    // Garde-fou 2 : enveloppe obligatoire
+    const targetEnvelope = envelopes.find(function (e) { return e.id === envelopeId; });
+    if (!targetEnvelope) {
+      showGuardAlert('Erreur : sélectionne ou crée une enveloppe valide.', true);
+      return;
+    }
+
+    const newDelta = type === 'income' ? amount : -amount;
+    const existingOp = editingOperationId
+      ? operations.find(function (o) { return o.id === editingOperationId; })
+      : null;
+
+    // Calcul du solde projeté de l'enveloppe après opération
+    let projectedBalance = (Number(targetEnvelope.balance) || 0) + newDelta;
+    if (existingOp && existingOp.envelopeId === envelopeId) {
+      const oldDelta = existingOp.type === 'income' ? existingOp.amount : -existingOp.amount;
+      projectedBalance = (Number(targetEnvelope.balance) || 0) - oldDelta + newDelta;
+    }
+
+    // Garde-fou 3 : avertissement non bloquant si une dépense fait passer l'enveloppe en négatif
+    if (type === 'expense' && projectedBalance < 0 && !awaitingNegativeConfirm) {
+      awaitingNegativeConfirm = true;
+      showGuardAlert(
+        'Attention : cette dépense fera passer l\'enveloppe « ' +
+          targetEnvelope.name +
+          ' » à ' +
+          formatNumber(projectedBalance) +
+          '. Clique à nouveau sur « Enregistrer l\'opération » pour confirmer.',
+        false
+      );
+      return;
+    }
+
+    awaitingNegativeConfirm = false;
+
+    if (existingOp) {
+      // Modification : annuler l'ancien impact sur l'ancienne enveloppe, puis appliquer le nouveau
+      const oldDelta = existingOp.type === 'income' ? existingOp.amount : -existingOp.amount;
+      adjustEnvelopeBalance(existingOp.envelopeId, -oldDelta);
+      adjustEnvelopeBalance(envelopeId, newDelta);
+
+      existingOp.type = type;
+      existingOp.amount = amount;
+      existingOp.wallet = wallet;
+      existingOp.envelopeId = envelopeId;
+      existingOp.label = label;
+      existingOp.attachment = draftAttachment;
+      existingOp.updatedAt = new Date().toISOString();
+
+      lastCreatedOperationId = null;
+      dom.voiceFeedback.textContent = 'Opération modifiée et solde des enveloppes recalculé.';
+    } else {
+      // Création : mettre à jour l'enveloppe (+ pour revenu, - pour dépense)
+      adjustEnvelopeBalance(envelopeId, newDelta);
+
+      const newOp = {
+        id: 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        type: type,
+        amount: amount,
+        wallet: wallet,
+        envelopeId: envelopeId,
+        label: label,
+        attachment: draftAttachment,
+        date: new Date().toISOString()
+      };
+
+      operations.unshift(newOp);
+      lastCreatedOperationId = newOp.id;
+      dom.voiceFeedback.textContent =
+        (type === 'income' ? 'Revenu (+' : 'Dépense (-') +
+        formatNumber(amount) +
+        ' • ' + wallet + ') enregistré dans « ' +
+        targetEnvelope.name +
+        ' ».';
+    }
+
+    localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, envelopeId);
+    persistAndRender();
+    clearDraft(true);
+  }
+
+  // --- Annulation rapide de la dernière opération ---
+  function undoLastOperation() {
+    if (!lastCreatedOperationId) return;
+    const idx = operations.findIndex(function (o) { return o.id === lastCreatedOperationId; });
+    if (idx !== -1) {
+      const op = operations[idx];
+      const delta = op.type === 'income' ? op.amount : -op.amount;
+      adjustEnvelopeBalance(op.envelopeId, -delta);
+      operations.splice(idx, 1);
+    }
+    lastCreatedOperationId = null;
+    persistAndRender();
+    dom.voiceFeedback.textContent = 'Dernière opération annulée ; l\'enveloppe a retrouvé son solde précédent.';
+  }
+
+  // --- Édition et suppression depuis l'historique ---
+  window.ftEditOperation = function (opId) {
+    const op = operations.find(function (o) { return o.id === opId; });
+    if (!op) return;
+
+    editingOperationId = op.id;
+    awaitingNegativeConfirm = false;
+    hideGuardAlert();
+
+    dom.inputType.value = op.type;
+    dom.inputAmount.value = op.amount;
+    dom.inputWallet.value = op.wallet || 'Espèces';
+    renderEnvelopeSelect();
+    if (envelopes.some(function (e) { return e.id === op.envelopeId; })) {
+      dom.inputEnvelope.value = op.envelopeId;
+    }
+    dom.inputLabel.value = op.label;
+
+    draftAttachment = op.attachment || null;
+    dom.inputReceipt.value = '';
+    renderAttachmentPreview(draftAttachment);
+
+    dom.draftBadge.textContent = 'Brouillon : Modification en cours';
+    dom.draftBadge.style.background = '#fef3c7';
+    dom.draftBadge.style.color = '#92400e';
+    dom.btnCancelEdit.style.display = 'inline-block';
+    dom.voiceFeedback.textContent = 'Modifie les champs puis clique sur « Enregistrer l\'opération ».';
+  };
+
+  window.ftDeleteOperation = function (opId) {
+    const idx = operations.findIndex(function (o) { return o.id === opId; });
+    if (idx === -1) return;
+
+    const op = operations[idx];
+    // Inverse l'effet de l'opération supprimée sur l'enveloppe
+    const delta = op.type === 'income' ? op.amount : -op.amount;
+    adjustEnvelopeBalance(op.envelopeId, -delta);
+
+    operations.splice(idx, 1);
+    if (lastCreatedOperationId === opId) lastCreatedOperationId = null;
+    if (editingOperationId === opId) clearDraft(true);
+
+    persistAndRender();
+    dom.voiceFeedback.textContent = 'Opération supprimée et solde de l\'enveloppe recalculé.';
+  };
+
+  window.ftOpenOperationReceipt = function (opId) {
+    const op = operations.find(function (o) { return o.id === opId; });
+    if (!op || !op.attachment || !op.attachment.data) return;
+
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      showGuardAlert('Autorise les fenêtres contextuelles (pop-ups) pour afficher le justificatif.', true);
+      return;
+    }
+
+    if (op.attachment.type === 'pdf') {
+      popup.document.write(
+        '<!doctype html><html><head><title>' + escapeHtml(op.attachment.name || 'Justificatif PDF') + '</title></head>' +
+        '<body style="margin:0;height:100vh;"><iframe src="' + op.attachment.data + '" style="width:100%;height:100%;border:0;"></iframe></body></html>'
+      );
+    } else {
+      popup.document.write(
+        '<!doctype html><html><head><title>' + escapeHtml(op.attachment.name || 'Justificatif photo') + '</title></head>' +
+        '<body style="margin:16px;background:#0f172a;display:flex;justify-content:center;align-items:flex-start;">' +
+        '<img src="' + op.attachment.data + '" style="max-width:100%;height:auto;border-radius:8px;" /></body></html>'
+      );
+    }
+    popup.document.close();
+  };
+
+  function renderHistoryList() {
+    if (!operations.length) {
+      dom.historyList.innerHTML = '<div style="font-size:0.86rem; color:#64748b;">Aucune opération enregistrée pour le moment.</div>';
+      return;
+    }
+
+    dom.historyList.innerHTML = operations.slice(0, 25).map(function (op) {
+      const env = envelopes.find(function (e) { return e.id === op.envelopeId; });
+      const envName = env ? env.name : 'Enveloppe supprimée';
+      const walletName = op.wallet || 'Espèces';
+      const isIncome = op.type === 'income';
+      const sign = isIncome ? '+' : '-';
+      const amountColor = isIncome ? '#15803d' : '#dc2626';
+
+      const receiptBtn = op.attachment
+        ? '<button type="button" onclick="ftOpenOperationReceipt(\'' + escapeHtml(op.id) + '\')" style="padding:3px 8px; border:none; border-radius:6px; background:#e2e8f0; color:#0f172a; cursor:pointer; font-size:0.78rem;">📎 Justificatif</button>'
+        : '';
+
+      return (
+        '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#ffffff;">' +
+          '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+            '<strong style="font-size:0.9rem;">' + escapeHtml(op.label) + '</strong>' +
+            '<span style="font-size:0.8rem; color:#64748b;">• ' + escapeHtml(envName) + ' (' + escapeHtml(walletName) + ')</span>' +
+            receiptBtn +
+          '</div>' +
+          '<div style="display:flex; align-items:center; gap:8px;">' +
+            '<span style="font-weight:700; color:' + amountColor + '; font-size:0.92rem;">' +
+              sign + formatNumber(op.amount) +
+            '</span>' +
+            '<button type="button" onclick="ftEditOperation(\'' + escapeHtml(op.id) + '\')" style="padding:4px 9px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; cursor:pointer; font-size:0.8rem;">Éditer</button>' +
+            '<button type="button" onclick="ftDeleteOperation(\'' + escapeHtml(op.id) + '\')" style="padding:4px 9px; border:1px solid #fecaca; border-radius:6px; background:#fef2f2; color:#b91c1c; cursor:pointer; font-size:0.8rem;">Supprimer</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  // --- Saisie vocale intelligente (Type, Montant, Portefeuille, Libellé en brouillon) ---
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+
+  if (SpeechRecognitionCtor) {
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'fr-FR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = function () {
+      dom.btnVoiceStart.style.opacity = '0.7';
+      dom.voiceFeedback.textContent =
+        'Écoute en cours... ex. : « Dépense 4500 carburant mobile money » ou « Revenu 50000 salaire banque ».';
+    };
+
+    recognition.onresult = function (event) {
+      const transcript = event.results[0][0].transcript;
+      dom.voiceFeedback.textContent =
+        'Entendu (brouillon non enregistré) : « ' + transcript + ' » — vérifie puis clique sur Enregistrer.';
+      applyVoiceTranscriptToDraft(transcript);
+    };
+
+    recognition.onerror = function (event) {
+      showGuardAlert('Reconnaissance vocale : ' + event.error, true);
+    };
+
+    recognition.onend = function () {
+      dom.btnVoiceStart.style.opacity = '1';
+    };
+  } else {
+    dom.btnVoiceStart.disabled = true;
+    dom.btnVoiceRetry.disabled = true;
+    dom.voiceFeedback.textContent = 'Saisie vocale non prise en charge sur ce navigateur ; utilise la saisie classique en brouillon.';
+  }
+
+  function applyVoiceTranscriptToDraft(transcript) {
+    const lower = String(transcript || '').toLowerCase();
+
+    // 1. Type : revenu vs dépense
+    const isIncome = /(revenu|entrée|entree|salaire|reçu|recu|vente|gain)/i.test(lower);
+    dom.inputType.value = isIncome ? 'income' : 'expense';
+
+    // 2. Montant (gère les espaces dans les grands nombres comme "15 000")
+    const normalizedNumbers = lower.replace(/\s+(?=\d{3})/g, '');
+    const amountMatch = normalizedNumbers.match(/\d+([.,]\d+)?/);
+    if (amountMatch) {
+      dom.inputAmount.value = amountMatch[0].replace(',', '.');
+    }
+
+    // 3. Portefeuille : Mobile Money, Banque ou Espèces
+    let detectedWallet = 'Espèces';
+    if (/(mobile money|momo|mtn|moov|celtiis|flooz)/i.test(lower)) {
+      detectedWallet = 'Mobile Money';
+    } else if (/(banque|carte|virement|chèque|cheque)/i.test(lower)) {
+      detectedWallet = 'Banque';
+    }
+    dom.inputWallet.value = detectedWallet;
+
+    // 4. Libellé nettoyé (retire mots-clés de type, devise, montant et portefeuille)
+    const cleanedLabel = lower
+      .replace(/(dépense|depense|revenu|entrée|entree|de|pour|par|en|francs|fcfa|euros|dollars)/gi, ' ')
+      .replace(/(mobile money|momo|mtn|moov|celtiis|flooz|banque|carte|virement|chèque|cheque|espèces|especes|cash|liquide)/gi, ' ')
+      .replace(/\d+([.,]\d+)?/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (cleanedLabel) {
+      dom.inputLabel.value = cleanedLabel.charAt(0).toUpperCase() + cleanedLabel.slice(1);
+    }
+
+    awaitingNegativeConfirm = false;
+    hideGuardAlert();
+  }
+
+  // --- Justificatifs : compression image via Canvas, PDF ≤ 1,5 Mo & retrait du brouillon ---
+  window.ftRemoveDraftAttachment = function () {
+    draftAttachment = null;
+    dom.inputReceipt.value = '';
+    renderAttachmentPreview(null);
+    hideGuardAlert();
+  };
+
+  function renderAttachmentPreview(att) {
+    if (!att || !att.data) {
+      dom.receiptPreviewBox.innerHTML = '';
+      return;
+    }
+
+    const removeBtn =
+      '<button type="button" onclick="ftRemoveDraftAttachment()" ' +
+      'style="margin-left:8px; padding:2px 8px; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; color:#0f172a; cursor:pointer; font-size:0.78rem;">' +
+      'Retirer</button>';
+
+    if (att.type === 'pdf') {
+      dom.receiptPreviewBox.innerHTML =
+        '<div style="display:flex; align-items:center; flex-wrap:wrap;">' +
+          '<span>📄 PDF joint : <strong>' + escapeHtml(att.name || 'document.pdf') + '</strong></span>' +
+          removeBtn +
+        '</div>';
+    } else {
+      dom.receiptPreviewBox.innerHTML =
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+          '<img src="' + att.data + '" alt="Aperçu justificatif" style="height:46px; width:auto; border-radius:6px; border:1px solid #cbd5e1;" />' +
+          '<span>Photo compressée prête</span>' +
+          removeBtn +
+        '</div>';
+    }
+  }
+
+  function compressImageFile(file, maxWidth, quality) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const img = new Image();
+        img.onload = function () {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
         };
+        img.onerror = reject;
+        img.src = ev.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 
-        const STORAGE_KEY = "fintrack_ai_v1";
-        let state = {
-            currency: "FCFA",
-            theme: "light",
-            privacy: false,
-            pin: null,
-            transactions: [],
-            budgets: {
-                "Alimentation": 60000,
-                "Transport": 45000,
-                "Logement & Factures": 75000,
-                "Loisirs & Sorties": 25000
-            },
-            recurring: [
-                { id: 1, label: "Loyer mensuel", amount: 50000, category: "Logement & Factures", sub: "Loyer", dayOfMonth: 5 },
-                { id: 2, label: "Forfait Internet", amount: 10000, category: "Logement & Factures", sub: "Internet / Téléphone", dayOfMonth: 15 }
-            ],
-            goals: [
-                { id: 1, name: "Fonds d'urgence", target: 300000, saved: 120000 },
-                { id: 2, name: "Entretien véhicule", target: 150000, saved: 65000 }
-            ],
-            learnedKeywords: {
-                "carburant": { type: "depense", cat: "Transport", sub: "Carburant" },
-                "essence": { type: "depense", cat: "Transport", sub: "Carburant" },
-                "vidange": { type: "depense", cat: "Transport", sub: "Entretien / Réparation" },
-                "marché": { type: "depense", cat: "Alimentation", sub: "Courses / Marché" },
-                "déjeuner": { type: "depense", cat: "Alimentation", sub: "Restaurant / Fast-food" },
-                "loyer": { type: "depense", cat: "Logement & Factures", sub: "Loyer" },
-                "sbee": { type: "depense", cat: "Logement & Factures", sub: "Électricité (SBEE)" },
-                "internet": { type: "depense", cat: "Logement & Factures", sub: "Internet / Téléphone" },
-                "salaire": { type: "revenu", cat: "Revenus Principaux", sub: "Salaire" }
-            }
+  dom.inputReceipt.addEventListener('change', async function (e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) {
+      draftAttachment = null;
+      renderAttachmentPreview(null);
+      return;
+    }
+
+    hideGuardAlert();
+
+    if (file.type === 'application/pdf') {
+      const maxPdfBytes = 1.5 * 1024 * 1024;
+      if (file.size > maxPdfBytes) {
+        showGuardAlert('Le fichier PDF dépasse 1,5 Mo. Choisis un fichier plus léger pour préserver le stockage local.', true);
+        e.target.value = '';
+        draftAttachment = null;
+        renderAttachmentPreview(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function () {
+        draftAttachment = {
+          name: file.name,
+          type: 'pdf',
+          data: reader.result
         };
+        renderAttachmentPreview(draftAttachment);
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type && file.type.startsWith('image/')) {
+      try {
+        const compressedDataUrl = await compressImageFile(file, 1000, 0.72);
+        draftAttachment = {
+          name: file.name,
+          type: 'image',
+          data: compressedDataUrl
+        };
+        renderAttachmentPreview(draftAttachment);
+      } catch (_) {
+        showGuardAlert('Impossible de compresser cette image.', true);
+      }
+    } else {
+      showGuardAlert('Format non pris en charge. Choisis une photo (JPG/PNG/WebP) ou un fichier PDF.', true);
+      e.target.value = '';
+    }
+  });
 
-        let currentPeriod = "month";
-        let currentTxType = "depense";
-        let trendChartInstance = null;
-        let categoryChartInstance = null;
-        let pinBuffer = "";
+  // --- Branchements des boutons ---
+  dom.btnAddEnv.addEventListener('click', function () {
+    const created = createEnvelope(dom.newEnvName.value, dom.newEnvInitial.value);
+    if (created) {
+      dom.newEnvName.value = '';
+      dom.newEnvInitial.value = '0';
+    }
+  });
 
-        // ==================== INITIALISATION ====================
-        function init() {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                state = { ...state, ...JSON.parse(saved) };
-            } else {
-                seedDemoData();
-            }
+  dom.btnVoiceStart.addEventListener('click', function () {
+    if (recognition) {
+      hideGuardAlert();
+      recognition.start();
+    }
+  });
 
-            document.documentElement.setAttribute("data-theme", state.theme);
-            document.getElementById("themeIcon").className = state.theme === "dark" ? "ph ph-sun" : "ph ph-moon";
-            document.getElementById("currencySelect").value = state.currency;
-            if (state.privacy) {
-                document.body.classList.add("privacy-active");
-                document.getElementById("privacyIcon").className = "ph ph-eye-slash";
-            }
+  dom.btnVoiceRetry.addEventListener('click', function () {
+    clearDraft(true);
+    if (recognition) {
+      recognition.start();
+    }
+  });
 
-            if (state.pin) {
-                document.getElementById("pinOverlay").style.display = "flex";
-                document.getElementById("pinToggleBtn").textContent = "Désactiver PIN";
-            }
+  dom.btnDraftClear.addEventListener('click', function () {
+    clearDraft(false);
+  });
 
-            populateFilterCategories();
-            refreshAll();
+  dom.btnSaveOperation.addEventListener('click', saveOperationFromDraft);
+  dom.btnCancelEdit.addEventListener('click', function () {
+    clearDraft(false);
+  });
+  dom.btnUndoLastOp.addEventListener('click', undoLastOperation);
+
+  // Réinitialise la demande de double confirmation si l'utilisateur modifie le brouillon
+  [dom.inputType, dom.inputAmount, dom.inputWallet, dom.inputEnvelope].forEach(function (el) {
+    el.addEventListener('input', function () {
+      awaitingNegativeConfirm = false;
+      hideGuardAlert();
+    });
+    el.addEventListener('change', function () {
+      awaitingNegativeConfirm = false;
+      hideGuardAlert();
+    });
+  });
+
+  // --- API globale pour Export / Import JSON complet ---
+  window.FinTrackSmartBackup = {
+    getPayload: function () {
+      return {
+        envelopes: loadJsonArray(STORAGE_KEYS.envelopes),
+        smartOperations: loadJsonArray(STORAGE_KEYS.operations),
+        lastEnvelopeId: localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) || null
+      };
+    },
+    restorePayload: function (payload) {
+      if (!payload || typeof payload !== 'object') return;
+      if (Array.isArray(payload.envelopes)) {
+        localStorage.setItem(STORAGE_KEYS.envelopes, JSON.stringify(payload.envelopes));
+      }
+      if (Array.isArray(payload.smartOperations)) {
+        localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(payload.smartOperations));
+      }
+      if (payload.lastEnvelopeId) {
+        localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, payload.lastEnvelopeId);
+      }
+      envelopes = loadJsonArray(STORAGE_KEYS.envelopes);
+      if (envelopes.length === 0) {
+        envelopes = [{ id: 'env-default-portefeuille', name: 'Portefeuille', balance: 0 }];
+      }
+      operations = loadJsonArray(STORAGE_KEYS.operations);
+      lastCreatedOperationId = null;
+      clearDraft(false);
+      persistAndRender();
+    },
+    buildFullBackup: function (existingAppData) {
+      return Object.assign({}, existingAppData || {}, {
+        smartModule: this.getPayload(),
+        exportedAt: new Date().toISOString()
+      });
+    },
+    applyFullBackup: function (parsedJson, restoreExistingAppFn) {
+      if (!parsedJson || typeof parsedJson !== 'object') return;
+      if (typeof restoreExistingAppFn === 'function') {
+        restoreExistingAppFn(parsedJson);
+      }
+      const smartPart = parsedJson.smartModule || parsedJson;
+      this.restorePayload(smartPart);
+    },
+    downloadJson: function (existingAppData, filename) {
+      const fullData = this.buildFullBackup(existingAppData);
+      const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || ('fintrack-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    },
+    handleFileImport: function (file, restoreExistingAppFn, onError) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          window.FinTrackSmartBackup.applyFullBackup(parsed, restoreExistingAppFn);
+        } catch (err) {
+          if (typeof onError === 'function') {
+            onError(err);
+          } else {
+            showGuardAlert('Fichier JSON invalide ou corrompu.', true);
+          }
         }
-
-        function saveState() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        }
-
-        function seedDemoData() {
-            const now = new Date();
-            const y = now.getFullYear();
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const prevM = now.getMonth() === 0 ? "12" : String(now.getMonth()).padStart(2, '0');
-            const prevY = now.getMonth() === 0 ? y - 1 : y;
-            const todayStr = now.toISOString().split("T")[0];
-
-            state.transactions = [
-                { id: 1, date: `${y}-${m}-01`, type: "revenu", category: "Revenus Principaux", sub: "Salaire", amount: 250000, label: "Revenu mensuel", wallet: "Banque" },
-                { id: 2, date: `${y}-${m}-02`, type: "virement", category: "Virement", sub: "Retrait", amount: 80000, label: "Retrait espèces", wallet: "Banque", walletTo: "Espèces" },
-                { id: 3, date: `${y}-${m}-03`, type: "depense", category: "Logement & Factures", sub: "Loyer", amount: 50000, label: "Loyer du mois", wallet: "Banque" },
-                { id: 4, date: `${y}-${m}-05`, type: "depense", category: "Transport", sub: "Carburant", amount: 15000, label: "Plein carburant", wallet: "Espèces" },
-                { id: 5, date: `${y}-${m}-08`, type: "depense", category: "Alimentation", sub: "Courses / Marché", amount: 22000, label: "Courses semaine", wallet: "Espèces" },
-                { id: 6, date: `${y}-${m}-12`, type: "revenu", category: "Activités Annexes", sub: "Prestation / Freelance", amount: 45000, label: "Mission conseil", wallet: "Mobile Money" },
-                { id: 7, date: `${y}-${m}-14`, type: "depense", category: "Logement & Factures", sub: "Électricité (SBEE)", amount: 12000, label: "Crédit compteur SBEE", wallet: "Mobile Money" },
-                { id: 8, date: todayStr, type: "depense", category: "Alimentation", sub: "Restaurant / Fast-food", amount: 3500, label: "Déjeuner", wallet: "Espèces" },
-                // Données mois précédent pour comparaison
-                { id: 9, date: `${prevY}-${prevM}-01`, type: "revenu", category: "Revenus Principaux", sub: "Salaire", amount: 250000, label: "Revenu mensuel", wallet: "Banque" },
-                { id: 10, date: `${prevY}-${prevM}-04`, type: "depense", category: "Logement & Factures", sub: "Loyer", amount: 50000, label: "Loyer", wallet: "Banque" },
-                { id: 11, date: `${prevY}-${prevM}-10`, type: "depense", category: "Transport", sub: "Carburant", amount: 28000, label: "Carburant mois passé", wallet: "Espèces" },
-                { id: 12, date: `${prevY}-${prevM}-15`, type: "depense", category: "Alimentation", sub: "Courses / Marché", amount: 48000, label: "Provisions mois passé", wallet: "Espèces" }
-            ];
-            saveState();
-        }
-
-        function resetDemoData() {
-            if (confirm("Remplacer les données actuelles par l'exemple de démonstration ?")) {
-                seedDemoData();
-                refreshAll();
-                showToast("Données de démonstration chargées");
-            }
-        }
-
-        // ==================== FORMATAGE & UTILITAIRES ====================
-        function fmtMoney(val) {
-            const num = Math.round(val || 0).toLocaleString("fr-FR");
-            return `${num} ${state.currency}`;
-        }
-
-        function showToast(msg) {
-            const t = document.getElementById("toast");
-            t.textContent = msg;
-            t.style.display = "block";
-            setTimeout(() => { t.style.display = "none"; }, 2600);
-        }
-
-        function filterByPeriod(txList, period) {
-            const now = new Date();
-            const todayStr = now.toISOString().split("T")[0];
-
-            return txList.filter(tx => {
-                if (period === "all") return true;
-                const d = new Date(tx.date + "T00:00:00");
-                if (period === "day") return tx.date === todayStr;
-                if (period === "week") {
-                    const dayOfWeek = (now.getDay() + 6) % 7; // Lundi = 0
-                    const monday = new Date(now);
-                    monday.setDate(now.getDate() - dayOfWeek);
-                    monday.setHours(0, 0, 0, 0);
-                    return d >= monday;
-                }
-                if (period === "month") {
-                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                }
-                if (period === "year") {
-                    return d.getFullYear() === now.getFullYear();
-                }
-                return true;
-            });
-        }
-
-        // ==================== CALCULS & RENDU PRINCIPAL ====================
-        function refreshAll() {
-            renderWallets();
-            renderKPIs();
-            renderQuickActions();
-            renderAIInsights();
-            renderCharts();
-            renderBudgetBars();
-            renderRecentTx();
-            renderHistory();
-            renderComparison();
-            renderHeatmap();
-            updateSimulator();
-            renderTools();
-        }
-
-        function setPeriod(p) {
-            currentPeriod = p;
-            document.querySelectorAll(".period-pill").forEach(btn => {
-                btn.classList.toggle("active", btn.dataset.period === p);
-            });
-            const labels = { day: "Aujourd'hui", week: "Cette semaine", month: "Ce mois", year: "Cette année", all: "Tout" };
-            document.getElementById("chartPeriodTag").textContent = labels[p];
-            renderKPIs();
-            renderCharts();
-        }
-
-        function renderWallets() {
-            const balances = { "Espèces": 0, "Mobile Money": 0, "Banque": 0 };
-            state.transactions.forEach(tx => {
-                if (tx.type === "revenu") balances[tx.wallet] = (balances[tx.wallet] || 0) + tx.amount;
-                if (tx.type === "depense") balances[tx.wallet] = (balances[tx.wallet] || 0) - tx.amount;
-                if (tx.type === "virement") {
-                    balances[tx.wallet] = (balances[tx.wallet] || 0) - tx.amount;
-                    balances[tx.walletTo] = (balances[tx.walletTo] || 0) + tx.amount;
-                }
-            });
-
-            const icons = { "Espèces": "ph-money", "Mobile Money": "ph-device-mobile", "Banque": "ph-bank" };
-            const container = document.getElementById("walletsRow");
-            container.innerHTML = Object.entries(balances).map(([name, bal]) => `
-                <div class="wallet-card">
-                    <div class="wallet-icon"><i class="ph ${icons[name] || 'ph-wallet'}"></i></div>
-                    <div>
-                        <div style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">${name}</div>
-                        <div class="sensitive" style="font-weight:800;font-size:1.05rem;">${fmtMoney(bal)}</div>
-                    </div>
-                </div>
-            `).join("");
-        }
-
-        function renderKPIs() {
-            // Trésorerie globale (toutes périodes)
-            let totalIncAll = 0, totalExpAll = 0;
-            state.transactions.forEach(tx => {
-                if (tx.type === "revenu") totalIncAll += tx.amount;
-                if (tx.type === "depense") totalExpAll += tx.amount;
-            });
-            const netCash = totalIncAll - totalExpAll;
-            document.getElementById("kpiNetCash").textContent = fmtMoney(netCash);
-            document.getElementById("kpiNetCash").className = `kpi-val sensitive ${netCash >= 0 ? 'text-success' : 'text-danger'}`;
-
-            // Flux de la période sélectionnée
-            const filtered = filterByPeriod(state.transactions, currentPeriod);
-            let pInc = 0, pExp = 0;
-            filtered.forEach(tx => {
-                if (tx.type === "revenu") pInc += tx.amount;
-                if (tx.type === "depense") pExp += tx.amount;
-            });
-
-            document.getElementById("kpiIncome").textContent = fmtMoney(pInc);
-            document.getElementById("kpiExpense").textContent = fmtMoney(pExp);
-
-            const savingsRate = pInc > 0 ? Math.round(((pInc - pExp) / pInc) * 100) : 0;
-            document.getElementById("kpiSavingsRate").innerHTML = `Taux d'épargne : <strong class="${savingsRate >= 0 ? 'text-success' : 'text-danger'}">${savingsRate} %</strong>`;
-
-            // Calcul de la moyenne journalière et autonomie
-            const now = new Date();
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const currentDay = now.getDate();
-            const remainingDays = Math.max(1, daysInMonth - currentDay + 1);
-
-            const monthTxs = filterByPeriod(state.transactions, "month");
-            const monthExp = monthTxs.filter(t => t.type === "depense").reduce((s, t) => s + t.amount, 0);
-            const dailyAvg = monthExp / Math.max(1, currentDay);
-
-            const autonomyDays = dailyAvg > 0 ? Math.floor(Math.max(0, netCash) / dailyAvg) : 999;
-            document.getElementById("kpiAutonomy").textContent = autonomyDays >= 999
-                ? "Autonomie : excellente (dépenses nulles)"
-                : `Autonomie estimée : ${autonomyDays} jours au rythme actuel`;
-
-            // Reste à vivre quotidien jusqu'à la fin du mois
-            const dailyAllowance = Math.max(0, netCash) / remainingDays;
-            document.getElementById("kpiDailyAllowance").textContent = fmtMoney(dailyAllowance);
-            document.getElementById("kpiDailyAvg").textContent = `Moyenne dépensée : ${fmtMoney(dailyAvg)}/jour`;
-
-            // Score de santé financière (0 - 100)
-            let score = 50;
-            if (netCash > 0) score += 20;
-            if (savingsRate >= 20) score += 20;
-            else if (savingsRate > 0) score += 10;
-            else score -= 15;
-            if (autonomyDays >= 30) score += 10;
-            score = Math.max(0, Math.min(100, score));
-
-            const scoreEl = document.getElementById("kpiHealthScore");
-            scoreEl.textContent = `${score} / 100`;
-            scoreEl.className = `kpi-val ${score >= 70 ? 'text-success' : score >= 45 ? 'text-warning' : 'text-danger'}`;
-            document.getElementById("kpiHealthLabel").textContent =
-                score >= 70 ? "Situation financière saine et maîtrisée" :
-                score >= 45 ? "Équilibre correct, surveillez vos plafonds" : "Attention : tension sur la trésorerie";
-        }
-
-        // ==================== APPRENTISSAGE INTELLIGENT & INSIGHTS ====================
-        function renderQuickActions() {
-            // Apprend les 4 dépenses les plus fréquentes
-            const freq = {};
-            state.transactions.filter(t => t.type === "depense").forEach(t => {
-                const key = t.label.trim().toLowerCase();
-                if (!freq[key]) freq[key] = { count: 0, tx: t };
-                freq[key].count++;
-                freq[key].tx = t;
-            });
-
-            const top = Object.values(freq).sort((a, b) => b.count - a.count).slice(0, 4);
-            const bar = document.getElementById("quickActionsBar");
-            if (top.length === 0) {
-                bar.style.display = "none";
-                return;
-            }
-            bar.style.display = "flex";
-            bar.innerHTML = `<div style="display:flex;align-items:center;font-size:0.78rem;font-weight:700;color:var(--text-muted);padding-right:4px;"><i class="ph ph-lightning text-warning"></i> 1-Clic :</div>` +
-                top.map(item => `
-                    <button class="quick-chip" onclick='quickLog(${JSON.stringify(item.tx)})'>
-                        <span>${item.tx.label}</span>
-                        <span class="amt sensitive">-${fmtMoney(item.tx.amount)}</span>
-                    </button>
-                `).join("");
-        }
-
-        function quickLog(templateTx) {
-            const today = new Date().toISOString().split("T")[0];
-            state.transactions.unshift({
-                id: Date.now(),
-                date: today,
-                type: templateTx.type,
-                category: templateTx.category,
-                sub: templateTx.sub,
-                amount: templateTx.amount,
-                label: templateTx.label,
-                wallet: templateTx.wallet || "Espèces"
-            });
-            saveState();
-            refreshAll();
-            showToast(`Ajouté : ${templateTx.label} (${fmtMoney(templateTx.amount)})`);
-        }
-
-        function renderAIInsights() {
-            const insights = [];
-            const now = new Date();
-            const monthTxs = filterByPeriod(state.transactions, "month");
-            const expByCat = {};
-            monthTxs.filter(t => t.type === "depense").forEach(t => {
-                expByCat[t.category] = (expByCat[t.category] || 0) + t.amount;
-            });
-
-            // 1. Catégorie dominante
-            const sortedCats = Object.entries(expByCat).sort((a, b) => b[1] - a[1]);
-            if (sortedCats.length > 0) {
-                const totalExp = sortedCats.reduce((s, c) => s + c[1], 0);
-                const pct = Math.round((sortedCats[0][1] / totalExp) * 100);
-                insights.push(`Votre premier poste de dépense ce mois-ci est <strong>${sortedCats[0][0]}</strong> (${pct} % de vos sorties).`);
-            }
-
-            // 2. Alertes plafonds budgétaires
-            Object.entries(state.budgets).forEach(([cat, limit]) => {
-                const spent = expByCat[cat] || 0;
-                const ratio = (spent / limit) * 100;
-                if (ratio >= 100) {
-                    insights.push(`<span class="text-danger"><strong>Alerte budget :</strong></span> Vous avez dépassé votre plafond <strong>${cat}</strong> (${Math.round(ratio)} %).`);
-                } else if (ratio >= 80) {
-                    insights.push(`<span class="text-warning"><strong>Vigilance :</strong></span> Vous avez consommé ${Math.round(ratio)} % de votre budget <strong>${cat}</strong>.`);
-                }
-            });
-
-            // 3. Comparaison semaine vs semaine précédente
-            const thisWeekExp = filterByPeriod(state.transactions, "week").filter(t => t.type === "depense").reduce((s, t) => s + t.amount, 0);
-            if (thisWeekExp === 0) {
-                insights.push(`Aucune dépense enregistrée cette semaine. Votre trésorerie est préservée.`);
-            } else if (insights.length < 2) {
-                insights.push(`Continuez à enregistrer vos opérations quotidiennes : le système affine automatiquement vos raccourcis et prévisions.`);
-            }
-
-            document.getElementById("aiInsightsList").innerHTML = insights.slice(0, 3).map(i => `<li>• ${i}</li>`).join("");
-        }
-
-        // ==================== GRAPHIQUES (CHART.JS) ====================
-        function renderCharts() {
-            const filtered = filterByPeriod(state.transactions, currentPeriod);
-
-            // 1. Courbe d'évolution temporelle
-            const grouped = {};
-            filtered.slice().reverse().forEach(tx => {
-                if (tx.type === "virement") return;
-                const key = currentPeriod === "year" || currentPeriod === "all" ? tx.date.slice(0, 7) : tx.date.slice(5);
-                if (!grouped[key]) grouped[key] = { inc: 0, exp: 0 };
-                if (tx.type === "revenu") grouped[key].inc += tx.amount;
-                if (tx.type === "depense") grouped[key].exp += tx.amount;
-            });
-
-            const labels = Object.keys(grouped);
-            const incData = labels.map(k => grouped[k].inc);
-            const expData = labels.map(k => grouped[k].exp);
-
-            if (trendChartInstance) trendChartInstance.destroy();
-            trendChartInstance = new Chart(document.getElementById("trendChart"), {
-                type: "line",
-                data: {
-                    labels: labels.length ? labels : ["Aucune donnée"],
-                    datasets: [
-                        { label: "Revenus", data: incData, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.12)", tension: 0.35, fill: true },
-                        { label: "Dépenses", data: expData, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.12)", tension: 0.35, fill: true }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: "bottom" } },
-                    scales: { y: { beginAtZero: true } }
-                }
-            });
-
-            // 2. Anneau de répartition par catégorie
-            const catTotals = {};
-            filtered.filter(t => t.type === "depense").forEach(t => {
-                catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
-            });
-
-            const catLabels = Object.keys(catTotals);
-            const catVals = Object.values(catTotals);
-            const catColors = catLabels.map(c => CATEGORIES.depense[c]?.color || "#64748b");
-
-            if (categoryChartInstance) categoryChartInstance.destroy();
-            categoryChartInstance = new Chart(document.getElementById("categoryChart"), {
-                type: "doughnut",
-                data: {
-                    labels: catLabels.length ? catLabels : ["Aucune dépense"],
-                    datasets: [{
-                        data: catVals.length ? catVals : [1],
-                        backgroundColor: catVals.length ? catColors : ["#e2e8f0"],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: "66%",
-                    plugins: { legend: { position: "right" } }
-                }
-            });
-        }
-
-        // ==================== BUDGETS & TRANSACTIONS ====================
-        function renderBudgetBars() {
-            const monthTxs = filterByPeriod(state.transactions, "month");
-            const spentMap = {};
-            monthTxs.filter(t => t.type === "depense").forEach(t => {
-                spentMap[t.category] = (spentMap[t.category] || 0) + t.amount;
-            });
-
-            const container = document.getElementById("budgetBarsContainer");
-            container.innerHTML = Object.entries(state.budgets).map(([cat, limit]) => {
-                const spent = spentMap[cat] || 0;
-                const pct = Math.min(100, Math.round((spent / limit) * 100));
-                const color = pct >= 100 ? "var(--danger)" : pct >= 75 ? "var(--warning)" : "var(--success)";
-                return `
-                    <div class="progress-item">
-                        <div class="progress-top">
-                            <span>${cat}</span>
-                            <span class="sensitive">${fmtMoney(spent)} / ${fmtMoney(limit)} (${pct}%)</span>
-                        </div>
-                        <div class="progress-track">
-                            <div class="progress-fill" style="width:${pct}%;background:${color};"></div>
-                        </div>
-                    </div>
-                `;
-            }).join("");
-        }
-
-        function createTxHTML(tx, allowDelete = false) {
-            const isExp = tx.type === "depense";
-            const isInc = tx.type === "revenu";
-            const catInfo = (isExp ? CATEGORIES.depense[tx.category] : CATEGORIES.revenu[tx.category]) || { icon: "ph-arrows-left-right", color: "#2563eb" };
-            const sign = isExp ? "-" : isInc ? "+" : "⇄";
-            const amtClass = isExp ? "text-danger" : isInc ? "text-success" : "text-primary";
-
-            return `
-                <div class="tx-item">
-                    <div class="tx-left">
-                        <div class="tx-cat-icon" style="background:${catInfo.color}20;color:${catInfo.color};">
-                            <i class="ph ${catInfo.icon}"></i>
-                        </div>
-                        <div>
-                            <div class="tx-title">${tx.label}</div>
-                            <div class="tx-meta">${tx.date} • ${tx.category}${tx.sub ? ' › ' + tx.sub : ''} • ${tx.wallet}${tx.walletTo ? ' → ' + tx.walletTo : ''}</div>
-                        </div>
-                    </div>
-                    <div class="tx-right">
-                        <span class="tx-amount sensitive ${amtClass}">${sign} ${fmtMoney(tx.amount)}</span>
-                        ${allowDelete ? `<button class="icon-btn" style="width:30px;height:30px;color:var(--danger);" onclick="deleteTx(${tx.id})"><i class="ph ph-trash"></i></button>` : ''}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderRecentTx() {
-            const list = state.transactions.slice(0, 5);
-            document.getElementById("recentTxContainer").innerHTML = list.length
-                ? list.map(t => createTxHTML(t, false)).join("")
-                : `<p style="color:var(--text-muted);font-size:0.9rem;">Aucune opération enregistrée.</p>`;
-        }
-
-        function populateFilterCategories() {
-            const sel = document.getElementById("filterCatSelect");
-            const allCats = [...Object.keys(CATEGORIES.depense), ...Object.keys(CATEGORIES.revenu)];
-            allCats.forEach(c => {
-                const opt = document.createElement("option");
-                opt.value = c;
-                opt.textContent = c;
-                sel.appendChild(opt);
-            });
-        }
-
-        function renderHistory() {
-            const q = document.getElementById("searchInput").value.toLowerCase();
-            const cat = document.getElementById("filterCatSelect").value;
-            const list = state.transactions.filter(t => {
-                const matchText = t.label.toLowerCase().includes(q) || (t.sub && t.sub.toLowerCase().includes(q));
-                const matchCat = cat === "ALL" || t.category === cat;
-                return matchText && matchCat;
-            });
-            document.getElementById("fullHistoryContainer").innerHTML = list.length
-                ? list.map(t => createTxHTML(t, true)).join("")
-                : `<p style="color:var(--text-muted);padding:12px 0;">Aucun résultat correspondant.</p>`;
-        }
-
-        function deleteTx(id) {
-            if (confirm("Supprimer cette opération ?")) {
-                state.transactions = state.transactions.filter(t => t.id !== id);
-                saveState();
-                refreshAll();
-                showToast("Opération supprimée");
-            }
-        }
-
-        // ==================== COMPARATEUR, HEATMAP & SIMULATEUR ====================
-        function renderComparison() {
-            const mode = document.getElementById("compModeSelect").value;
-            const now = new Date();
-            const curMap = {}, prevMap = {};
-
-            state.transactions.filter(t => t.type === "depense").forEach(t => {
-                const d = new Date(t.date + "T00:00:00");
-                let isCur = false, isPrev = false;
-
-                if (mode === "month") {
-                    isCur = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                    const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-                    const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-                    isPrev = d.getMonth() === prevMonth && d.getFullYear() === prevYear;
-                } else if (mode === "year") {
-                    isCur = d.getFullYear() === now.getFullYear();
-                    isPrev = d.getFullYear() === now.getFullYear() - 1;
-                } else {
-                    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
-                    isCur = diffDays >= 0 && diffDays < 7;
-                    isPrev = diffDays >= 7 && diffDays < 14;
-                }
-
-                if (isCur) curMap[t.category] = (curMap[t.category] || 0) + t.amount;
-                if (isPrev) prevMap[t.category] = (prevMap[t.category] || 0) + t.amount;
-            });
-
-            const cats = Object.keys(CATEGORIES.depense);
-            document.getElementById("compTableBody").innerHTML = cats.map(c => {
-                const cur = curMap[c] || 0;
-                const prev = prevMap[c] || 0;
-                let badge = `<span class="badge-delta" style="background:var(--bg-input);color:var(--text-muted);">= 0 %</span>`;
-                if (prev > 0) {
-                    const pct = Math.round(((cur - prev) / prev) * 100);
-                    const isUp = pct > 0;
-                    badge = `<span class="badge-delta" style="background:${isUp ? 'var(--danger-soft)' : 'var(--success-soft)'};color:${isUp ? 'var(--danger)' : 'var(--success)'};">${isUp ? '+' : ''}${pct} %</span>`;
-                } else if (cur > 0) {
-                    badge = `<span class="badge-delta" style="background:var(--warning-soft);color:var(--warning);">Nouveau</span>`;
-                }
-                return `
-                    <tr>
-                        <td style="font-weight:600;">${c}</td>
-                        <td class="sensitive">${fmtMoney(cur)}</td>
-                        <td class="sensitive" style="color:var(--text-muted);">${fmtMoney(prev)}</td>
-                        <td>${badge}</td>
-                    </tr>
-                `;
-            }).join("");
-        }
-
-        function renderHeatmap() {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const firstDay = (new Date(year, month, 1).getDay() + 6) % 7;
-
-            const dailySpend = {};
-            let maxSpend = 1;
-            filterByPeriod(state.transactions, "month").filter(t => t.type === "depense").forEach(t => {
-                const day = parseInt(t.date.split("-")[2], 10);
-                dailySpend[day] = (dailySpend[day] || 0) + t.amount;
-                if (dailySpend[day] > maxSpend) maxSpend = dailySpend[day];
-            });
-
-            const headers = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(d => `<div class="heat-day-label">${d}</div>`).join("");
-            let blanks = "";
-            for (let i = 0; i < firstDay; i++) blanks += `<div></div>`;
-
-            let cells = "";
-            for (let d = 1; d <= daysInMonth; d++) {
-                const amt = dailySpend[d] || 0;
-                const intensity = amt / maxSpend;
-                let bg = "var(--bg-input)";
-                if (amt > 0) {
-                    bg = intensity > 0.65 ? "rgba(239, 68, 68, 0.35)" : intensity > 0.3 ? "rgba(245, 158, 11, 0.3)" : "rgba(16, 185, 129, 0.22)";
-                }
-                cells += `<div class="heat-cell" style="background:${bg};" title="Jour ${d} : ${fmtMoney(amt)}">${d}</div>`;
-            }
-            document.getElementById("heatmapContainer").innerHTML = headers + blanks + cells;
-        }
-
-        function updateSimulator() {
-            const pct = parseInt(document.getElementById("simSlider").value, 10);
-            document.getElementById("simPctLabel").textContent = `${pct} %`;
-            const monthExp = filterByPeriod(state.transactions, "month").filter(t => t.type === "depense").reduce((s, t) => s + t.amount, 0);
-            const monthlySave = monthExp * (pct / 100);
-            document.getElementById("sim3m").textContent = fmtMoney(monthlySave * 3);
-            document.getElementById("sim12m").textContent = fmtMoney(monthlySave * 12);
-        }
-
-        // ==================== OUTILS, ÉCHÉANCES, OBJECTIFS & SÉCURITÉ ====================
-        function renderTools() {
-            // Charges fixes
-            document.getElementById("recurringList").innerHTML = state.recurring.map(r => `
-                <div class="tx-item">
-                    <div>
-                        <div class="tx-title">${r.label}</div>
-                        <div class="tx-meta">Chaque ${r.dayOfMonth} du mois • ${r.category}</div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="sensitive" style="font-weight:700;">${fmtMoney(r.amount)}</span>
-                        <button class="btn-outline" style="padding:5px 10px;font-size:0.78rem;color:var(--success);" onclick="payRecurring(${r.id})">Payer</button>
-                    </div>
-                </div>
-            `).join("");
-
-            // Objectifs d'épargne
-            document.getElementById("goalsList").innerHTML = state.goals.map(g => {
-                const pct = Math.min(100, Math.round((g.saved / g.target) * 100));
-                return `
-                    <div class="progress-item">
-                        <div class="progress-top">
-                            <span>${g.name}</span>
-                            <span class="sensitive">${fmtMoney(g.saved)} / ${fmtMoney(g.target)} (${pct}%)</span>
-                        </div>
-                        <div class="progress-track" style="margin-bottom:6px;">
-                            <div class="progress-fill" style="width:${pct}%;background:var(--primary);"></div>
-                        </div>
-                        <button class="btn-outline" style="padding:4px 10px;font-size:0.75rem;" onclick="contributeGoal(${g.id})">+ Ajouter de l'épargne</button>
-                    </div>
-                `;
-            }).join("");
-
-            // Plafonds budgétaires
-            document.getElementById("budgetSettingsList").innerHTML = Object.keys(CATEGORIES.depense).map(cat => `
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span style="font-size:0.88rem;font-weight:600;">${cat}</span>
-                    <input type="number" class="form-control" style="width:130px;padding:6px 10px;" value="${state.budgets[cat] || ''}" placeholder="Aucun" onchange="updateBudgetLimit('${cat}', this.value)">
-                </div>
-            `).join("");
-        }
-
-        function payRecurring(id) {
-            const item = state.recurring.find(r => r.id === id);
-            if (!item) return;
-            state.transactions.unshift({
-                id: Date.now(),
-                date: new Date().toISOString().split("T")[0],
-                type: "depense",
-                category: item.category,
-                sub: item.sub,
-                amount: item.amount,
-                label: item.label,
-                wallet: "Banque"
-            });
-            saveState();
-            refreshAll();
-            showToast(`Charge enregistrée : ${item.label}`);
-        }
-
-        function addRecurringPrompt() {
-            const label = prompt("Nom de la charge fixe (ex: Abonnement Gym) :");
-            if (!label) return;
-            const amount = parseFloat(prompt("Montant :"));
-            if (!amount) return;
-            const day = parseInt(prompt("Jour du mois (1 à 31) :", "1"), 10) || 1;
-            state.recurring.push({ id: Date.now(), label, amount, category: "Logement & Factures", sub: "Autre", dayOfMonth: day });
-            saveState();
-            renderTools();
-        }
-
-        function addGoalPrompt() {
-            const name = prompt("Nom de l'objectif (ex: Achat ordinateur) :");
-            if (!name) return;
-            const target = parseFloat(prompt("Montant cible :"));
-            if (!target) return;
-            state.goals.push({ id: Date.now(), name, target, saved: 0 });
-            saveState();
-            renderTools();
-        }
-
-        function contributeGoal(id) {
-            const g = state.goals.find(x => x.id === id);
-            if (!g) return;
-            const add = parseFloat(prompt(`Montant à ajouter à "${g.name}" :`));
-            if (!add || add <= 0) return;
-            g.saved += add;
-            saveState();
-            renderTools();
-            showToast("Tirelire mise à jour !");
-        }
-
-        function updateBudgetLimit(cat, val) {
-            const num = parseFloat(val);
-            if (num > 0) state.budgets[cat] = num;
-            else delete state.budgets[cat];
-            saveState();
-            renderBudgetBars();
-            showToast("Plafond budgétaire enregistré");
-        }
-
-        // ==================== FORMULAIRE, CALCULATRICE, VOIX & AUTO-APPRENTISSAGE ====================
-        function openTxModal() {
-            document.getElementById("txModal").classList.add("open");
-            document.getElementById("txDate").value = new Date().toISOString().split("T")[0];
-            document.getElementById("txAmount").value = "";
-            document.getElementById("txLabel").value = "";
-            setTxType("depense");
-            setTimeout(() => document.getElementById("txAmount").focus(), 150);
-        }
-
-        function closeTxModal() {
-            document.getElementById("txModal").classList.remove("open");
-        }
-
-        function setTxType(type) {
-            currentTxType = type;
-            document.querySelectorAll(".type-btn").forEach(b => b.classList.toggle("active", b.dataset.type === type));
-            const catRow = document.getElementById("catRow");
-            const walletToGroup = document.getElementById("walletToGroup");
-
-            if (type === "virement") {
-                catRow.style.display = "none";
-                walletToGroup.style.display = "block";
-                document.getElementById("walletFromLabel").textContent = "Depuis le compte";
-            } else {
-                catRow.style.display = "grid";
-                walletToGroup.style.display = "none";
-                document.getElementById("walletFromLabel").textContent = "Compte / Portefeuille";
-                const catSel = document.getElementById("txCategory");
-                catSel.innerHTML = Object.keys(CATEGORIES[type]).map(c => `<option value="${c}">${c}</option>`).join("");
-                updateSubcategories();
-            }
-        }
-
-        function updateSubcategories() {
-            const cat = document.getElementById("txCategory").value;
-            const subs = CATEGORIES[currentTxType]?.[cat]?.subs || [];
-            document.getElementById("txSubcategory").innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join("");
-        }
-
-        function smartAutoCategorize(text) {
-            if (currentTxType === "virement") return;
-            const clean = text.toLowerCase().trim();
-            for (const [kw, rule] of Object.entries(state.learnedKeywords)) {
-                if (clean.includes(kw)) {
-                    if (rule.type !== currentTxType) setTxType(rule.type);
-                    document.getElementById("txCategory").value = rule.cat;
-                    updateSubcategories();
-                    if (rule.sub) document.getElementById("txSubcategory").value = rule.sub;
-                    break;
-                }
-            }
-        }
-
-        function evaluateMathExpression(expr) {
-            const sanitized = expr.replace(/,/g, ".").replace(/[^0-9+\-*/().]/g, "");
-            if (!sanitized) return NaN;
-            try {
-                return Function(`"use strict"; return (${sanitized})`)();
-            } catch {
-                return NaN;
-            }
-        }
-
-        function saveTransaction(e) {
-            e.preventDefault();
-            const rawAmt = document.getElementById("txAmount").value;
-            const amount = evaluateMathExpression(rawAmt);
-            if (isNaN(amount) || amount <= 0) {
-                alert("Veuillez saisir un montant valide.");
-                return;
-            }
-
-            const label = document.getElementById("txLabel").value.trim();
-            const date = document.getElementById("txDate").value;
-            const wallet = document.getElementById("txWallet").value;
-
-            const tx = {
-                id: Date.now(),
-                date,
-                type: currentTxType,
-                amount: Math.round(amount * 100) / 100,
-                label,
-                wallet
-            };
-
-            if (currentTxType === "virement") {
-                tx.category = "Virement";
-                tx.sub = "Transfert interne";
-                tx.walletTo = document.getElementById("txWalletTo").value;
-            } else {
-                tx.category = document.getElementById("txCategory").value;
-                tx.sub = document.getElementById("txSubcategory").value;
-                // Apprentissage automatique du mot-clé principal
-                const firstWord = label.toLowerCase().split(/\s+/)[0];
-                if (firstWord && firstWord.length >= 3) {
-                    state.learnedKeywords[firstWord] = { type: currentTxType, cat: tx.category, sub: tx.sub };
-                }
-            }
-
-            state.transactions.unshift(tx);
-            saveState();
-            closeTxModal();
-            refreshAll();
-            showToast("Opération enregistrée !");
-        }
-
-        // Saisie vocale (Web Speech API)
-        function startVoiceInput() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert("La reconnaissance vocale n'est pas supportée par ce navigateur.");
-                return;
-            }
-            const recognition = new SpeechRecognition();
-            recognition.lang = "fr-FR";
-            showToast("Parlez maintenant (ex: 3500 carburant)...");
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                const numMatch = transcript.match(/\d+([.,]\d+)?/);
-                if (numMatch) {
-                    document.getElementById("txAmount").value = numMatch[0];
-                    const cleanLabel = transcript.replace(numMatch[0], "").replace(/francs|fcfa|euros|dollars|pour|de/gi, "").trim();
-                    if (cleanLabel) {
-                        document.getElementById("txLabel").value = cleanLabel.charAt(0).toUpperCase() + cleanLabel.slice(1);
-                        smartAutoCategorize(cleanLabel);
-                    }
-                } else {
-                    document.getElementById("txLabel").value = transcript;
-                    smartAutoCategorize(transcript);
-                }
-            };
-            recognition.start();
-        }
-
-        // ==================== NAVIGATION, THÈME, PIN & EXPORTS ====================
-        function switchView(viewName) {
-            document.querySelectorAll(".view-section").forEach(s => s.classList.remove("active"));
-            document.getElementById(`view-${viewName}`).classList.add("active");
-            document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === viewName));
-        }
-
-        function toggleTheme() {
-            state.theme = state.theme === "light" ? "dark" : "light";
-            document.documentElement.setAttribute("data-theme", state.theme);
-            document.getElementById("themeIcon").className = state.theme === "dark" ? "ph ph-sun" : "ph ph-moon";
-            saveState();
-        }
-
-        function togglePrivacy() {
-            state.privacy = !state.privacy;
-            document.body.classList.toggle("privacy-active", state.privacy);
-            document.getElementById("privacyIcon").className = state.privacy ? "ph ph-eye-slash" : "ph ph-eye";
-            saveState();
-        }
-
-        function changeCurrency(cur) {
-            state.currency = cur;
-            saveState();
-            refreshAll();
-        }
-
-        // Gestion PIN
-        function configurePin() {
-            if (state.pin) {
-                if (confirm("Désactiver le verrouillage par code PIN ?")) {
-                    state.pin = null;
-                    saveState();
-                    document.getElementById("pinToggleBtn").textContent = "Activer PIN";
-                    showToast("Code PIN désactivé");
-                }
-            } else {
-                const newPin = prompt("Choisissez un code PIN à 4 chiffres :");
-                if (newPin && /^\d{4}$/.test(newPin)) {
-                    state.pin = newPin;
-                    saveState();
-                    document.getElementById("pinToggleBtn").textContent = "Désactiver PIN";
-                    showToast("Code PIN activé !");
-                } else {
-                    alert("Le code doit comporter exactement 4 chiffres.");
-                }
-            }
-        }
-
-        function enterPin(digit) {
-            if (pinBuffer.length >= 4) return;
-            pinBuffer += digit;
-            updatePinDots();
-            if (pinBuffer.length === 4) {
-                if (pinBuffer === state.pin) {
-                    document.getElementById("pinOverlay").style.display = "none";
-                    pinBuffer = "";
-                    updatePinDots();
-                } else {
-                    document.getElementById("pinMessage").textContent = "Code incorrect, réessayez";
-                    document.getElementById("pinMessage").style.color = "var(--danger)";
-                    pinBuffer = "";
-                    setTimeout(updatePinDots, 300);
-                }
-            }
-        }
-        function backspacePin() { pinBuffer = pinBuffer.slice(0, -1); updatePinDots(); }
-        function clearPin() { pinBuffer = ""; updatePinDots(); }
-        function updatePinDots() {
-            document.querySelectorAll(".pin-dot").forEach((dot, idx) => {
-                dot.classList.toggle("filled", idx < pinBuffer.length);
-            });
-        }
-
-        // Export Excel (.csv) & Sauvegarde (.json)
-        function exportCSV() {
-            const headers = ["Date", "Type", "Categorie", "Sous-categorie", "Libelle", "Compte", "Montant"];
-            const rows = state.transactions.map(t => [
-                t.date, t.type, `"${t.category}"`, `"${t.sub || ''}"`, `"${t.label.replace(/"/g, '""')}"`, `"${t.wallet}"`, t.amount
-            ]);
-            const csvContent = "\uFEFF" + [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `FinTrack_Export_${new Date().toISOString().split("T")[0]}.csv`;
-            link.click();
-            showToast("Fichier Excel (.csv) téléchargé");
-        }
-
-        function exportJSON() {
-            const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `FinTrack_Sauvegarde_${new Date().toISOString().split("T")[0]}.json`;
-            link.click();
-            showToast("Sauvegarde complète (.json) téléchargée");
-        }
-
-        function importJSON(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if (imported.transactions) {
-                        state = { ...state, ...imported };
-                        saveState();
-                        refreshAll();
-                        showToast("Données restaurées avec succès !");
-                    }
-                } catch {
-                    alert("Fichier de sauvegarde invalide.");
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        window.addEventListener("DOMContentLoaded", init);
-    </script>
-</body>
-</html>
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // --- Initialisation au chargement de la page ---
+  persistAndRender();
+})();
+</script>
