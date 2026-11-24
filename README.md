@@ -1,2 +1,0 @@
-# SPG-AI
-SUPER G AI
