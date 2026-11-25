@@ -1,1010 +1,1589 @@
-<!-- =====================================================================
-     MODULE COMPLET FINTRAX AI (VERSION MISE À JOUR) :
-     - Enveloppes physiques (+ revenu / - dépense, création à la volée, suppression sécurisée)
-     - Saisie vocale intelligente en brouillon (Type, Montant, Portefeuille, Libellé)
-     - Justificatifs optionnels (Photos compressées via Canvas + PDF ≤ 1,5 Mo + bouton Retirer)
-     - Garde-fous (brouillon, Effacer, Réessayer, montant > 0, alerte solde négatif)
-     - Correction (Annuler dernière opération, Éditer, Supprimer + recalcul)
-     - Synchronisation tableau de bord + Export/Import JSON complet
-     ===================================================================== -->
-<section id="fintrackSmartSuite" aria-label="Module intelligent FinTrack AI" style="font-family: system-ui, -apple-system, sans-serif; border: 1px solid #cbd5e1; border-radius: 14px; padding: 18px; margin: 18px 0; background: #ffffff; color: #0f172a; box-sizing: border-box;">
-
-  <!-- 1. ENVELOPPES PHYSIQUES, CRÉATION À LA VOLÉE & SUPPRESSION SÉCURISÉE -->
-  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
-    <div>
-      <h3 style="margin: 0; font-size: 1.05rem;">Enveloppes physiques</h3>
-      <small style="color: #64748b;">Chaque revenu alimente (+) l'enveloppe choisie ; chaque dépense en est déduite (-).</small>
-    </div>
-
-    <!-- Formulaire de création rapide d'une nouvelle enveloppe -->
-    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-      <input
-        type="text"
-        id="ftNewEnvName"
-        placeholder="Ex: Poche, Coffre, Carburant..."
-        style="padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;"
-      />
-      <input
-        type="number"
-        id="ftNewEnvInitial"
-        step="any"
-        value="0"
-        placeholder="Solde initial"
-        style="width: 115px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem;"
-      />
-      <button
-        type="button"
-        id="ftBtnAddEnv"
-        style="padding: 8px 14px; border: none; border-radius: 8px; background: #0f172a; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
-      >
-        + Créer enveloppe
-      </button>
-    </div>
-  </div>
-
-  <!-- Grille d'affichage en direct des enveloppes, de leurs soldes et de la suppression sécurisée -->
-  <div id="ftEnvelopesCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 10px; margin-bottom: 16px;"></div>
-
-  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
-
-  <!-- 2. BARRE DE CONTRÔLE DU BROUILLON & SAISIE VOCALE -->
-  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-      <button
-        type="button"
-        id="ftBtnVoiceStart"
-        style="padding: 8px 13px; border: none; border-radius: 8px; background: #dc2626; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
-      >
-        🎤 Saisie vocale
-      </button>
-      <button
-        type="button"
-        id="ftBtnVoiceRetry"
-        style="padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #0f172a; cursor: pointer; font-size: 0.88rem;"
-      >
-        ↻ Réessayer
-      </button>
-      <button
-        type="button"
-        id="ftBtnDraftClear"
-        style="padding: 8px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #0f172a; cursor: pointer; font-size: 0.88rem;"
-      >
-        ✕ Effacer
-      </button>
-    </div>
-
-    <!-- Indicateur visuel de l'état du brouillon (Nouvelle saisie vs Modification) -->
-    <span
-      id="ftDraftBadge"
-      style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8;"
-    >
-      Brouillon : Nouvelle opération
-    </span>
-  </div>
-
-  <!-- Zone de retour vocal / statut du brouillon (jamais enregistrée sans clic sur Enregistrer) -->
-  <div
-    id="ftVoiceFeedback"
-    style="font-size: 0.86rem; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; padding: 9px 12px; border-radius: 8px; margin-bottom: 12px;"
-  >
-    Aucun enregistrement tant que tu ne cliques pas sur « Enregistrer l'opération ».
-  </div>
-
-  <!-- 3. CHAMPS DU BROUILLON (TYPE, MONTANT, PORTEFEUILLE, ENVELOPPE, LIBELLÉ) -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
-    <div>
-      <label for="ftInputType" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Type d'opération
-      </label>
-      <select id="ftInputType" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;">
-        <option value="expense">Dépense (- enveloppe)</option>
-        <option value="income">Revenu (+ enveloppe)</option>
-      </select>
-    </div>
-
-    <div>
-      <label for="ftInputAmount" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Montant
-      </label>
-      <input
-        type="number"
-        id="ftInputAmount"
-        step="any"
-        min="0"
-        placeholder="Ex: 5000"
-        style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;"
-      />
-    </div>
-
-    <div>
-      <label for="ftInputWallet" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Portefeuille (détecté à la voix)
-      </label>
-      <select id="ftInputWallet" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;">
-        <option value="Espèces">Espèces</option>
-        <option value="Mobile Money">Mobile Money</option>
-        <option value="Banque">Banque</option>
-      </select>
-    </div>
-
-    <div>
-      <label for="ftInputEnvelope" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Enveloppe physique
-      </label>
-      <select id="ftInputEnvelope" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; font-size: 0.9rem;"></select>
-    </div>
-
-    <div>
-      <label for="ftInputLabel" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Libellé / Motif
-      </label>
-      <input
-        type="text"
-        id="ftInputLabel"
-        placeholder="Ex: Transport, Salaire..."
-        style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;"
-      />
-    </div>
-  </div>
-
-  <!-- 4. JUSTIFICATIF OPTIONNEL (PHOTO COMPRESSÉE OU PDF + RETRAIT INDIVIDUEL) -->
-  <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px dashed #cbd5e1;">
-    <div>
-      <label for="ftInputReceipt" style="display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px;">
-        Justificatif optionnel (Photo compressée ou PDF ≤ 1,5 Mo)
-      </label>
-      <input
-        type="file"
-        id="ftInputReceipt"
-        accept="image/*,application/pdf"
-        capture="environment"
-        style="font-size: 0.85rem;"
-      />
-    </div>
-    <div id="ftReceiptPreviewBox" style="font-size: 0.84rem; color: #334155;"></div>
-  </div>
-
-  <!-- 5. ZONE DE GARDE-FOUS (ERREURS BLOQUANTES OU ALERTE SOLDE NÉGATIF) -->
-  <div
-    id="ftGuardAlert"
-    role="alert"
-    style="display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 0.88rem; font-weight: 500;"
-  ></div>
-
-  <!-- 6. BOUTONS DE VALIDATION, ANNULATION DE MODIFICATION ET ANNULATION RAPIDE -->
-  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
-    <button
-      type="button"
-      id="ftBtnSaveOperation"
-      style="padding: 10px 16px; border: none; border-radius: 8px; background: #16a34a; color: #ffffff; font-weight: 600; cursor: pointer; font-size: 0.92rem;"
-    >
-      Enregistrer l'opération
-    </button>
-
-    <button
-      type="button"
-      id="ftBtnCancelEdit"
-      style="display: none; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #0f172a; cursor: pointer; font-size: 0.9rem;"
-    >
-      Annuler la modification
-    </button>
-
-    <button
-      type="button"
-      id="ftBtnUndoLastOp"
-      style="display: none; padding: 10px 14px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-weight: 600; cursor: pointer; font-size: 0.9rem;"
-    >
-      ↶ Annuler la dernière opération
-    </button>
-  </div>
-
-  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 18px 0;" />
-
-  <!-- 7. HISTORIQUE DES OPÉRATIONS (JUSTIFICATIF, ÉDITION, SUPPRESSION) -->
-  <div>
-    <h4 style="margin: 0 0 10px 0; font-size: 0.98rem;">
-      Historique des opérations (modification et suppression avec recalcul automatique)
-    </h4>
-    <div id="ftHistoryList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-  </div>
-</section>
-
-<script>
-(function () {
-  'use strict';
-
-  // --- Clés de stockage local (localStorage) ---
-  const STORAGE_KEYS = {
-    envelopes: 'fintrack_smart_envelopes_v1',
-    operations: 'fintrack_smart_ops_v1',
-    lastEnvelopeId: 'fintrack_last_envelope_id'
-  };
-
-  // --- État de l'application dans le module ---
-  let envelopes = loadJsonArray(STORAGE_KEYS.envelopes);
-  if (envelopes.length === 0) {
-    // Enveloppe par défaut pour éviter toute friction au premier démarrage
-    envelopes = [{ id: 'env-default-portefeuille', name: 'Portefeuille', balance: 0 }];
-  }
-
-  let operations = loadJsonArray(STORAGE_KEYS.operations);
-  let draftAttachment = null;        // { name, type: 'image'|'pdf', data: 'data:...' }
-  let editingOperationId = null;     // ID de l'opération en cours d'édition, ou null
-  let lastCreatedOperationId = null; // ID de la dernière opération ajoutée (pour annulation rapide)
-  let awaitingNegativeConfirm = false; // Passe à true après un premier avertissement de solde négatif
-
-  // --- Références DOM ---
-  const dom = {
-    newEnvName: document.getElementById('ftNewEnvName'),
-    newEnvInitial: document.getElementById('ftNewEnvInitial'),
-    btnAddEnv: document.getElementById('ftBtnAddEnv'),
-    envelopesCards: document.getElementById('ftEnvelopesCards'),
-
-    btnVoiceStart: document.getElementById('ftBtnVoiceStart'),
-    btnVoiceRetry: document.getElementById('ftBtnVoiceRetry'),
-    btnDraftClear: document.getElementById('ftBtnDraftClear'),
-    draftBadge: document.getElementById('ftDraftBadge'),
-    voiceFeedback: document.getElementById('ftVoiceFeedback'),
-
-    inputType: document.getElementById('ftInputType'),
-    inputAmount: document.getElementById('ftInputAmount'),
-    inputWallet: document.getElementById('ftInputWallet'),
-    inputEnvelope: document.getElementById('ftInputEnvelope'),
-    inputLabel: document.getElementById('ftInputLabel'),
-
-    inputReceipt: document.getElementById('ftInputReceipt'),
-    receiptPreviewBox: document.getElementById('ftReceiptPreviewBox'),
-
-    guardAlert: document.getElementById('ftGuardAlert'),
-    btnSaveOperation: document.getElementById('ftBtnSaveOperation'),
-    btnCancelEdit: document.getElementById('ftBtnCancelEdit'),
-    btnUndoLastOp: document.getElementById('ftBtnUndoLastOp'),
-
-    historyList: document.getElementById('ftHistoryList')
-  };
-
-  // --- Utilitaires ---
-  function loadJsonArray(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      return [];
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinTrack AI — Tableau de Bord WhatsApp</title>
+  <style>
+    :root {
+      --wa-teal: #008069;
+      --wa-teal-dark: #005c4b;
+      --wa-accent: #00a884;
+      --wa-bubble: #d9fdd3;
+      --wa-bg: #efeae2;
+      --wa-dots: rgba(11, 20, 26, 0.04);
+      --wa-surface: #ffffff;
+      --wa-soft: #f0f2f5;
+      --wa-text: #111b21;
+      --wa-muted: #54656f;
+      --wa-line: #e9edef;
+      --danger: #d93025;
+      --danger-bg: #fce8e6;
+      --warn: #9a6700;
+      --warn-bg: #fff8c5;
+      --ok: #008069;
+      --ok-bg: #d9fdd3;
+      --shadow: 0 1px 3px rgba(11, 20, 26, 0.09);
+      --menu-shadow: 0 6px 20px rgba(11, 20, 26, 0.18);
     }
-  }
 
-  function escapeHtml(text) {
-    return String(text ?? '').replace(/[&<>"']/g, function (char) {
-      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-      return map[char] || char;
-    });
-  }
-
-  function formatNumber(num) {
-    const n = Number(num) || 0;
-    return n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  }
-
-  // --- Messages de garde-fou ---
-  function showGuardAlert(message, isBlockingError) {
-    dom.guardAlert.style.display = 'block';
-    if (isBlockingError) {
-      dom.guardAlert.style.background = '#fef2f2';
-      dom.guardAlert.style.color = '#991b1b';
-      dom.guardAlert.style.border = '1px solid #fecaca';
-    } else {
-      dom.guardAlert.style.background = '#fffbeb';
-      dom.guardAlert.style.color = '#92400e';
-      dom.guardAlert.style.border = '1px solid #fde68a';
+    body.wa-dark {
+      --wa-teal: #1f2c34;
+      --wa-teal-dark: #111b21;
+      --wa-accent: #00a884;
+      --wa-bubble: #005c4b;
+      --wa-bg: #0b141a;
+      --wa-dots: rgba(255, 255, 255, 0.025);
+      --wa-surface: #111b21;
+      --wa-soft: #202c33;
+      --wa-text: #e9edef;
+      --wa-muted: #8696a0;
+      --wa-line: #222d34;
+      --danger-bg: rgba(217, 48, 37, 0.22);
+      --warn-bg: rgba(154, 103, 0, 0.25);
+      --ok-bg: rgba(0, 168, 132, 0.2);
+      --menu-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     }
-    dom.guardAlert.textContent = message;
-  }
 
-  function hideGuardAlert() {
-    dom.guardAlert.style.display = 'none';
-    dom.guardAlert.textContent = '';
-  }
+    * { box-sizing: border-box; }
 
-  // --- Sauvegarde locale, rendu & hook de synchronisation ---
-  function persistAndRender() {
-    localStorage.setItem(STORAGE_KEYS.envelopes, JSON.stringify(envelopes));
-    localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(operations));
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--wa-bg);
+      background-image:
+        radial-gradient(var(--wa-dots) 1px, transparent 1px),
+        radial-gradient(var(--wa-dots) 1px, var(--wa-bg) 1px);
+      background-size: 22px 22px;
+      background-position: 0 0, 11px 11px;
+      color: var(--wa-text);
+      padding-bottom: 86px;
+    }
 
-    renderEnvelopesCards();
-    renderEnvelopeSelect();
-    renderHistoryList();
+    /* Écran PIN */
+    #pinLockOverlay {
+      position: fixed;
+      inset: 0;
+      background: var(--wa-teal-dark);
+      color: #fff;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+    }
+    #pinLockOverlay.active { display: flex; }
+    .pin-box {
+      width: 100%;
+      max-width: 330px;
+      background: #111b21;
+      border: 1px solid #222d34;
+      border-radius: 16px;
+      padding: 22px;
+      text-align: center;
+    }
+    .pin-dots { font-size: 1.7rem; letter-spacing: 10px; margin: 12px 0; color: var(--wa-accent); }
+    .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .pin-key {
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      background: #202c33;
+      color: #e9edef;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
 
-    dom.btnUndoLastOp.style.display = lastCreatedOperationId ? 'inline-block' : 'none';
+    /* Barre supérieure WhatsApp sans onglets horizontaux */
+    .wa-header {
+      background: var(--wa-teal);
+      color: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 300;
+      box-shadow: 0 2px 5px rgba(11, 20, 26, 0.15);
+    }
+    .wa-header-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 11px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      position: relative;
+    }
+    .wa-brand-title { font-size: 1.1rem; font-weight: 700; }
+    .wa-brand-sub { font-size: 0.74rem; opacity: 0.88; }
 
-    // Notifie les autres parties de FinTrack AI si le hook est défini
-    if (typeof window.onFinTrackSmartUpdate === 'function') {
-      window.onFinTrackSmartUpdate({
-        envelopes: envelopes.slice(),
-        operations: operations.slice()
+    .wa-more-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: #ffffff;
+      font-size: 1.35rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .wa-more-btn:hover { background: rgba(255, 255, 255, 0.14); }
+
+    /* Menu déroulant des 3 points style WhatsApp */
+    #waOverflowBackdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 440;
+      display: none;
+    }
+    #waOverflowBackdrop.open { display: block; }
+
+    #waOverflowMenu {
+      position: fixed;
+      top: 56px;
+      right: 12px;
+      width: 260px;
+      max-width: calc(100vw - 24px);
+      background: var(--wa-surface);
+      border: 1px solid var(--wa-line);
+      border-radius: 10px;
+      box-shadow: var(--menu-shadow);
+      z-index: 450;
+      padding: 6px 0;
+      display: none;
+      max-height: calc(100vh - 90px);
+      overflow-y: auto;
+    }
+    #waOverflowMenu.open { display: block; }
+
+    .wa-menu-item {
+      width: 100%;
+      border: none;
+      background: transparent;
+      color: var(--wa-text);
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .wa-menu-item:hover { background: var(--wa-soft); }
+    .wa-menu-sep { height: 1px; background: var(--wa-line); margin: 4px 0; }
+
+    /* Conteneur principal */
+    .wa-container {
+      max-width: 1120px;
+      margin: 12px auto;
+      padding: 0 12px;
+    }
+    .page-view { display: none; }
+    .page-view.active { display: block; }
+
+    .wa-card {
+      background: var(--wa-surface);
+      border: 1px solid var(--wa-line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+    .wa-card-green {
+      background: var(--wa-bubble);
+      border-color: rgba(0, 128, 105, 0.25);
+    }
+    .wa-card h3, .wa-card h4 { margin: 0 0 8px 0; font-size: 0.98rem; }
+
+    /* Sélecteur de période : Journée / Semaine / Mois / Année */
+    .timeframe-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tf-btn {
+      border: 1px solid var(--wa-line);
+      background: var(--wa-surface);
+      color: var(--wa-text);
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tf-btn.active {
+      background: var(--wa-teal);
+      color: #ffffff;
+      border-color: var(--wa-teal);
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi-card {
+      background: var(--wa-surface);
+      border: 1px solid var(--wa-line);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: var(--shadow);
+    }
+    .kpi-lbl { font-size: 0.72rem; font-weight: 700; color: var(--wa-muted); text-transform: uppercase; }
+    .kpi-val { font-size: 1.32rem; font-weight: 800; margin: 4px 0; }
+    .kpi-sub { font-size: 0.78rem; color: var(--wa-muted); }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+    .grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+
+    label { display: block; font-size: 0.76rem; font-weight: 600; color: var(--wa-muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--wa-line);
+      border-radius: 10px;
+      background: var(--wa-soft);
+      color: var(--wa-text);
+      font-size: 0.88rem;
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-teal { background: var(--wa-teal); color: #fff; }
+    .btn-green { background: var(--wa-accent); color: #fff; }
+    .btn-red { background: var(--danger); color: #fff; }
+    .btn-soft { background: var(--wa-soft); color: var(--wa-text); border-color: var(--wa-line); }
+    .btn-soft-red { background: var(--danger-bg); color: var(--danger); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+    .guard-msg {
+      display: none;
+      margin-top: 10px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .guard-msg.err { display: block; background: var(--danger-bg); color: var(--danger); }
+    .guard-msg.warn { display: block; background: var(--warn-bg); color: var(--warn); }
+
+    .meter-bg { height: 8px; border-radius: 999px; background: var(--wa-soft); overflow: hidden; margin-top: 5px; }
+    .meter-fill { height: 100%; background: var(--wa-accent); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--wa-line); text-align: left; }
+
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 8px; }
+    .cal-day { border: 1px solid var(--wa-line); border-radius: 8px; padding: 6px 4px; text-align: center; font-size: 0.75rem; }
+
+    /* PIED DE PAGE AVEC EXACTEMENT 4 BOUTONS */
+    footer.wa-footer-four {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--wa-surface);
+      border-top: 1px solid var(--wa-line);
+      z-index: 350;
+      padding: 6px 8px;
+      box-shadow: 0 -2px 8px rgba(11, 20, 26, 0.08);
+    }
+    .footer-four-row {
+      max-width: 760px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .foot-4-btn {
+      border: none;
+      background: transparent;
+      color: var(--wa-muted);
+      border-radius: 10px;
+      padding: 7px 4px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .foot-4-btn.active {
+      color: var(--wa-accent);
+      background: var(--wa-soft);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ÉCRAN DE DÉVERROUILLAGE PIN -->
+  <div id="pinLockOverlay" aria-modal="true">
+    <div class="pin-box">
+      <h3 style="margin:0;">FinTrack Sécurisé</h3>
+      <div style="font-size:0.82rem; color:#8696a0; margin-top:4px;">Code PIN à 4 chiffres</div>
+      <div class="pin-dots" id="pinDots">• • • •</div>
+      <div id="pinErr" style="color:#f87171; font-size:0.82rem; min-height:18px;"></div>
+      <div class="pin-grid">
+        <button type="button" class="pin-key" onclick="pinPush('1')">1</button>
+        <button type="button" class="pin-key" onclick="pinPush('2')">2</button>
+        <button type="button" class="pin-key" onclick="pinPush('3')">3</button>
+        <button type="button" class="pin-key" onclick="pinPush('4')">4</button>
+        <button type="button" class="pin-key" onclick="pinPush('5')">5</button>
+        <button type="button" class="pin-key" onclick="pinPush('6')">6</button>
+        <button type="button" class="pin-key" onclick="pinPush('7')">7</button>
+        <button type="button" class="pin-key" onclick="pinPush('8')">8</button>
+        <button type="button" class="pin-key" onclick="pinPush('9')">9</button>
+        <button type="button" class="pin-key" onclick="pinReset()">Effacer</button>
+        <button type="button" class="pin-key" onclick="pinPush('0')">0</button>
+        <button type="button" class="pin-key" onclick="pinVerify()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU DÉROULANT DES 3 POINTS STYLE WHATSAPP -->
+  <div id="waOverflowBackdrop" onclick="closeOverflow()"></div>
+  <div id="waOverflowMenu" role="menu" aria-label="Options et paramètres">
+    <button type="button" class="wa-menu-item" onclick="openExtraView('envelopes'); closeOverflow();">
+      <span>💼 Enveloppes physiques</span>
+    </button>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('compare'); closeOverflow();">
+      <span>📊 Comparateur & Thermique</span>
+    </button>
+    <div class="wa-menu-sep"></div>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('settings'); closeOverflow(); jumpTo('blockSimulator');">
+      <span>📈 Simulateur « Et si ? »</span>
+    </button>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('settings'); closeOverflow(); jumpTo('blockBillsGoals');">
+      <span>📌 Charges fixes & Objectifs</span>
+    </button>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('settings'); closeOverflow(); jumpTo('blockCaps');">
+      <span>🎯 Plafonds mensuels</span>
+    </button>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('settings'); closeOverflow(); jumpTo('blockPinCurrency');">
+      <span>🔐 Code PIN & Devise</span>
+    </button>
+    <button type="button" class="wa-menu-item" onclick="openExtraView('settings'); closeOverflow(); jumpTo('blockBackup');">
+      <span>💾 Sauvegarde / Restauration .json</span>
+    </button>
+    <div class="wa-menu-sep"></div>
+    <button type="button" class="wa-menu-item" onclick="toggleWaTheme(); closeOverflow();">
+      <span>🌓 Thème clair / sombre</span>
+    </button>
+  </div>
+
+  <!-- EN-TÊTE WHATSAPP AVEC BOUTON 3 POINTS À DROITE -->
+  <header class="wa-header">
+    <div class="wa-header-inner">
+      <div>
+        <div class="wa-brand-title">FinTrack AI</div>
+        <div class="wa-brand-sub" id="headerSummary">Tableau de bord • Enveloppes & brouillon</div>
+      </div>
+      <button type="button" class="wa-more-btn" id="btnThreeDots" title="Plus d'options" aria-label="Plus d'options">⋮</button>
+    </div>
+  </header>
+
+  <!-- CONTENU PRINCIPAL -->
+  <main class="wa-container">
+
+    <!-- PAGE D'ACCUEIL : TABLEAU DE BORD RÉCAPITULATIF À L'OUVERTURE -->
+    <section id="view-dashboard" class="page-view active">
+      <div class="timeframe-bar" id="timeframeBar" role="group" aria-label="Période du tableau de bord">
+        <button type="button" class="tf-btn" data-tf="today">Journée</button>
+        <button type="button" class="tf-btn" data-tf="week">Semaine</button>
+        <button type="button" class="tf-btn active" data-tf="month">Mois</button>
+        <button type="button" class="tf-btn" data-tf="year">Année</button>
+      </div>
+
+      <div class="wa-card wa-card-green">
+        <h3 id="dashPeriodHeading">Récapitulatif du mois</h3>
+        <div id="dashSummaryText" style="font-size:0.89rem;">Chargement du tableau de bord...</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-lbl">Trésorerie totale</div>
+          <div class="kpi-val" id="dTreasury">0 F</div>
+          <div class="kpi-sub" id="dAutonomy">Autonomie : calcul...</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-lbl">Revenus (période)</div>
+          <div class="kpi-val" style="color:var(--ok);" id="dIncome">0 F</div>
+          <div class="kpi-sub">Taux d'épargne : <strong id="dSavings">0 %</strong></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-lbl">Dépenses (période)</div>
+          <div class="kpi-val" style="color:var(--danger);" id="dExpense">0 F</div>
+          <div class="kpi-sub" id="dAvgDay">Moyenne : 0 F/jour</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-lbl">Reste à vivre / jour</div>
+          <div class="kpi-val" id="dDaily">0 F</div>
+          <div class="kpi-sub">Score santé : <strong id="dScore">-- / 100</strong></div>
+        </div>
+      </div>
+
+      <!-- ENVELOPPES PHYSIQUES SUR LE TABLEAU DE BORD -->
+      <div class="wa-card" id="dashEnvelopesCard">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <div>
+            <h3>Enveloppes physiques</h3>
+            <small style="color:var(--wa-muted);">Revenu = + sur l'enveloppe • Dépense = - sur l'enveloppe.</small>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <input type="text" id="envNewName" placeholder="Nouvelle enveloppe..." style="width:155px;" />
+            <input type="number" id="envNewInit" step="any" value="0" placeholder="Solde initial" style="width:105px;" />
+            <button type="button" class="btn btn-green btn-sm" id="btnCreateEnvelope">+ Ajouter</button>
+          </div>
+        </div>
+        <div id="dashEnvelopesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px;"></div>
+      </div>
+
+      <!-- FORMULAIRE DE SAISIE & BROUILLON VOCAL -->
+      <div class="wa-card" id="composerCard">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+          <h3 style="margin:0;" id="composerTitle">Nouvelle opération / Brouillon</h3>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-red btn-sm" id="btnStartVoiceDraft">🎤 Dicter</button>
+            <button type="button" class="btn btn-soft btn-sm" id="btnRetryVoiceDraft">↻ Réessayer</button>
+            <button type="button" class="btn btn-soft btn-sm" id="btnClearDraftForm">✕ Effacer</button>
+          </div>
+        </div>
+
+        <div id="draftStatusBanner" style="font-size:0.84rem; color:var(--wa-muted); background:var(--wa-soft); padding:8px 12px; border-radius:10px; margin-bottom:10px;">
+          Brouillon prêt : rien n'est enregistré avant validation.
+        </div>
+
+        <div class="grid-fields">
+          <div>
+            <label for="opTypeSelect">Type d'opération</label>
+            <select id="opTypeSelect">
+              <option value="expense">Dépense (- enveloppe)</option>
+              <option value="income">Revenu (+ enveloppe)</option>
+            </select>
+          </div>
+          <div>
+            <label for="opAmountInput">Montant (ex: 5000 ou 2500 + 1500)</label>
+            <input type="text" id="opAmountInput" placeholder="Ex: 5000 ou 2500 + 1500" />
+          </div>
+          <div>
+            <label for="opLabelInput">Libellé</label>
+            <input type="text" id="opLabelInput" placeholder="Ex: Carburant, Salaire..." />
+          </div>
+          <div>
+            <label for="opWalletSelect">Portefeuille</label>
+            <select id="opWalletSelect">
+              <option value="Espèces">Espèces</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Banque">Banque</option>
+            </select>
+          </div>
+          <div>
+            <label for="opEnvelopeSelect">Enveloppe physique</label>
+            <select id="opEnvelopeSelect"></select>
+          </div>
+          <div>
+            <label for="opCategorySelect">Catégorie</label>
+            <select id="opCategorySelect"></select>
+          </div>
+          <div>
+            <label for="opSubcatInput">Sous-catégorie</label>
+            <input type="text" id="opSubcatInput" placeholder="Optionnel" />
+          </div>
+          <div>
+            <label for="opDateInput">Date</label>
+            <input type="date" id="opDateInput" />
+          </div>
+        </div>
+
+        <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; background:var(--wa-soft); padding:9px 12px; border-radius:10px; border:1px dashed var(--wa-line);">
+          <div>
+            <label for="opReceiptInput" style="margin-bottom:4px;">Justificatif optionnel (Photo compressée ou PDF ≤ 1,5 Mo)</label>
+            <input type="file" id="opReceiptInput" accept="image/*,application/pdf" capture="environment" style="font-size:0.82rem;" />
+          </div>
+          <div id="opReceiptBox" style="font-size:0.82rem;"></div>
+        </div>
+
+        <div id="composerGuardAlert" class="guard-msg"></div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+          <button type="button" class="btn btn-green" id="btnSaveOperation">Enregistrer l'opération</button>
+          <button type="button" class="btn btn-soft" id="btnCancelEditOp" style="display:none;">Annuler la modification</button>
+          <button type="button" class="btn btn-soft-red" id="btnUndoLastCreated" style="display:none;">↶ Annuler la dernière opération</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="wa-card">
+          <h3>Revenus vs Dépenses (période choisie)</h3>
+          <div id="dashIncExpChart"></div>
+        </div>
+        <div class="wa-card">
+          <h3>Répartition par Catégorie</h3>
+          <div id="dashCategoryList"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="wa-card">
+          <h3>Suivi des Plafonds Mensuels</h3>
+          <div id="dashCapsPreview"></div>
+        </div>
+        <div class="wa-card">
+          <h3>Dernières opérations</h3>
+          <div id="dashRecentOps"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VUE HISTORIQUE -->
+    <section id="view-history" class="page-view">
+      <div class="wa-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <h3 style="margin:0;">Historique des opérations</h3>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" id="histSearchBox" placeholder="Rechercher..." style="width:180px;" />
+            <select id="histCategoryFilter" style="width:170px;"></select>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Libellé</th>
+                <th>Catégorie</th>
+                <th>Enveloppe / Compte</th>
+                <th>Justificatif</th>
+                <th>Montant</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="histRowsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VUE COMPARATEUR & THERMIQUE (ACCESSIBLE VIA LE MENU 3 POINTS) -->
+    <section id="view-compare" class="page-view">
+      <div class="wa-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <h3 style="margin:0;">Comparateur Période vs Précédente</h3>
+          <select id="cmpPeriodSelect" style="width:225px;">
+            <option value="month">Ce mois vs Mois dernier</option>
+            <option value="week">Cette semaine vs Semaine dernière</option>
+            <option value="year">Cette année vs Année dernière</option>
+          </select>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Catégorie</th>
+                <th>Actuel</th>
+                <th>Précédent</th>
+                <th>Évolution</th>
+              </tr>
+            </thead>
+            <tbody id="cmpRowsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="wa-card">
+        <h3>Calendrier Thermique (Intensité du mois)</h3>
+        <div class="cal-grid" id="heatCalendarGrid"></div>
+      </div>
+    </section>
+
+    <!-- VUE ENVELOPPES DÉTAILLÉES (ACCESSIBLE VIA LE MENU 3 POINTS) -->
+    <section id="view-envelopes" class="page-view">
+      <div class="wa-card">
+        <h3>Gestion des Enveloppes Physiques</h3>
+        <p style="font-size:0.84rem; color:var(--wa-muted); margin-top:0;">
+          Ajoutez, consultez ou supprimez vos enveloppes (la suppression est bloquée s'il ne reste qu'une enveloppe ou si l'enveloppe contient des opérations).
+        </p>
+        <div id="extraEnvelopesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px;"></div>
+      </div>
+    </section>
+
+    <!-- VUE RÉGLAGES & OUTILS (ACCESSIBLE VIA LE MENU 3 POINTS) -->
+    <section id="view-settings" class="page-view">
+      <div class="wa-card" id="blockSimulator">
+        <h3>Simulateur d'Épargne « Et si ? »</h3>
+        <label for="simSliderInput">Réduire mes dépenses de : <strong id="simSliderLabel">15 %</strong></label>
+        <input type="range" id="simSliderInput" min="0" max="60" step="5" value="15" />
+        <div class="kpi-grid" style="margin-top:10px; margin-bottom:0;">
+          <div class="kpi-card">
+            <div class="kpi-lbl">Gain dans 3 mois</div>
+            <div class="kpi-val" style="color:var(--ok);" id="simOut3">0 F</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-lbl">Gain dans 1 an</div>
+            <div class="kpi-val" style="color:var(--ok);" id="simOut12">0 F</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" id="blockBillsGoals">
+        <div class="wa-card">
+          <h3>Charges Fixes & Échéances</h3>
+          <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <input type="text" id="newBillName" placeholder="Ex: Loyer" style="flex:1; min-width:120px;" />
+            <input type="number" id="newBillAmount" placeholder="Montant" style="width:110px;" />
+            <button type="button" class="btn btn-teal btn-sm" id="btnAddFixedBill">Ajouter</button>
+          </div>
+          <div id="fixedBillsList"></div>
+        </div>
+
+        <div class="wa-card">
+          <h3>Objectifs d'Épargne (Tirelires)</h3>
+          <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+            <input type="text" id="newGoalName" placeholder="Projet" style="flex:1; min-width:110px;" />
+            <input type="number" id="newGoalTarget" placeholder="Cible" style="width:95px;" />
+            <input type="number" id="newGoalSaved" placeholder="Épargné" style="width:95px;" />
+            <button type="button" class="btn btn-teal btn-sm" id="btnAddSavingsGoal">Nouveau</button>
+          </div>
+          <div id="savingsGoalsList"></div>
+        </div>
+      </div>
+
+      <div class="wa-card" id="blockCaps">
+        <h3>Plafonds Mensuels par Catégorie</h3>
+        <div id="capsFormGrid" class="grid-fields"></div>
+      </div>
+
+      <div class="wa-card" id="blockPinCurrency">
+        <h3>Sécurité & Devise</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 0; border-bottom:1px solid var(--wa-line);">
+          <div>
+            <strong>Verrouillage par Code PIN</strong>
+            <div style="font-size:0.8rem; color:var(--wa-muted);">Code à 4 chiffres à l'ouverture</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="password" id="pinCodeField" maxlength="4" placeholder="PIN 4 chiffres" style="width:120px;" />
+            <button type="button" class="btn btn-teal btn-sm" id="btnEnablePin">Activer PIN</button>
+            <button type="button" class="btn btn-soft btn-sm" id="btnDisablePin">Désactiver</button>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 0;">
+          <div>
+            <strong>Devise d'affichage</strong>
+            <div style="font-size:0.8rem; color:var(--wa-muted);">Symbole monétaire</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-soft btn-sm currency-choice" data-cur="FCFA">FCFA</button>
+            <button type="button" class="btn btn-soft btn-sm currency-choice" data-cur="EUR">Euro (€)</button>
+            <button type="button" class="btn btn-soft btn-sm currency-choice" data-cur="USD">Dollar ($)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="wa-card" id="blockBackup">
+        <h3>Sauvegarde & Restauration des Données</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" class="btn btn-green" id="btnDownloadBackup">Sauvegarder (.json)</button>
+          <label class="btn btn-soft" style="margin:0;">
+            Restaurer (.json)
+            <input type="file" id="inputRestoreBackup" accept="application/json,.json" style="display:none;" />
+          </label>
+          <button type="button" class="btn btn-soft" id="btnLoadDemoData">Charger des données de démonstration</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- EXACTEMENT 4 BOUTONS AU PIED DE PAGE -->
+  <footer class="wa-footer-four" aria-label="Barre de navigation principale">
+    <div class="footer-four-row">
+      <button type="button" class="foot-4-btn active" id="navBtnDashboard" data-nav="dashboard">
+        <span>🏠</span><span>Accueil</span>
+      </button>
+      <button type="button" class="foot-4-btn" id="navBtnHistory" data-nav="history">
+        <span>📋</span><span>Historique</span>
+      </button>
+      <button type="button" class="foot-4-btn" id="navBtnEntry" data-nav="entry">
+        <span>➕</span><span>Saisie</span>
+      </button>
+      <button type="button" class="foot-4-btn" id="navBtnVoice" data-nav="voice">
+        <span>🎤</span><span>Vocal</span>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+  (function () {
+    'use strict';
+
+    const STORAGE_KEY = 'fintrack_wa_four_btn_v1';
+    const CATEGORIES = [
+      'Alimentation', 'Transport', 'Logement', 'Santé', 'Éducation',
+      'Factures & Énergie', 'Loisirs', 'Salaire / Revenus', 'Commerce', 'Autres'
+    ];
+    const RULES = [
+      { kw: ['riz', 'pain', 'repas', 'nourriture', 'marché', 'marche', 'eau'], cat: 'Alimentation' },
+      { kw: ['essence', 'carburant', 'taxi', 'moto', 'bus', 'transport'], cat: 'Transport' },
+      { kw: ['loyer', 'maison', 'caution'], cat: 'Logement' },
+      { kw: ['pharmacie', 'hôpital', 'hopital', 'médecin', 'santé', 'sante'], cat: 'Santé' },
+      { kw: ['sbee', 'courant', 'électricité', 'electricite', 'internet', 'forfait', 'facture'], cat: 'Factures & Énergie' },
+      { kw: ['salaire', 'paie', 'prime', 'vente', 'revenu', 'entrée', 'entree'], cat: 'Salaire / Revenus' }
+    ];
+
+    function defaultState() {
+      return {
+        dark: false,
+        currency: 'FCFA',
+        timeframe: 'month',
+        pin: null,
+        envelopes: [{ id: 'env-main', name: 'Portefeuille', balance: 0 }],
+        operations: [],
+        bills: [],
+        goals: [],
+        caps: {
+          'Alimentation': 0,
+          'Transport': 0,
+          'Logement': 0,
+          'Factures & Énergie': 0,
+          'Loisirs': 0
+        },
+        lastCreatedId: null
+      };
+    }
+
+    let db = loadDb();
+    let draftAtt = null;
+    let editingOpId = null;
+    let negConfirmed = false;
+    let pinBuffer = '';
+
+    function loadDb() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const p = JSON.parse(raw);
+        const def = defaultState();
+        return Object.assign(def, p, {
+          envelopes: Array.isArray(p.envelopes) && p.envelopes.length ? p.envelopes : def.envelopes,
+          operations: Array.isArray(p.operations) ? p.operations : [],
+          bills: Array.isArray(p.bills) ? p.bills : [],
+          goals: Array.isArray(p.goals) ? p.goals : [],
+          caps: Object.assign(def.caps, p.caps || {})
+        });
+      } catch (_) {
+        return defaultState();
+      }
+    }
+
+    function saveDb() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      if (typeof window.onFinTrackSmartUpdate === 'function') {
+        window.onFinTrackSmartUpdate({
+          envelopes: db.envelopes.slice(),
+          operations: db.operations.slice()
+        });
+      }
+    }
+
+    function fmtMoney(val) {
+      const n = Number(val) || 0;
+      const s = n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+      if (db.currency === 'EUR') return s + ' €';
+      if (db.currency === 'USD') return '$' + s;
+      return s + ' F';
+    }
+
+    function esc(str) {
+      return String(str ?? '').replace(/[&<>"']/g, function (c) {
+        return { '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c] || c;
       });
     }
-  }
 
-  // --- Gestion des enveloppes physiques (création + suppression sécurisée) ---
-  function createEnvelope(name, initialBalance) {
-    const cleanName = String(name || '').trim();
-    if (!cleanName) {
-      showGuardAlert('Veuillez saisir un nom pour la nouvelle enveloppe.', true);
+    // --- Thème ---
+    function applyWaTheme() { document.body.classList.toggle('wa-dark', !!db.dark); }
+    function toggleWaTheme() { db.dark = !db.dark; applyWaTheme(); saveDb(); }
+    window.toggleWaTheme = toggleWaTheme;
+
+    // --- Menu 3 points WhatsApp ---
+    function openOverflow() {
+      document.getElementById('waOverflowMenu').classList.add('open');
+      document.getElementById('waOverflowBackdrop').classList.add('open');
+    }
+    function closeOverflow() {
+      document.getElementById('waOverflowMenu').classList.remove('open');
+      document.getElementById('waOverflowBackdrop').classList.remove('open');
+    }
+    window.closeOverflow = closeOverflow;
+
+    document.getElementById('btnThreeDots').addEventListener('click', function (e) {
+      e.stopPropagation();
+      const menu = document.getElementById('waOverflowMenu');
+      if (menu.classList.contains('open')) closeOverflow();
+      else openOverflow();
+    });
+
+    function showView(viewId) {
+      document.querySelectorAll('.page-view').forEach(function (v) {
+        v.classList.toggle('active', v.id === 'view-' + viewId);
+      });
+      document.querySelectorAll('.foot-4-btn').forEach(function (b) {
+        b.classList.remove('active');
+      });
+      if (viewId === 'dashboard') document.getElementById('navBtnDashboard').classList.add('active');
+      if (viewId === 'history') document.getElementById('navBtnHistory').classList.add('active');
+      renderDashboard();
+    }
+
+    window.openExtraView = function (viewId) {
+      showView(viewId);
+    };
+
+    window.jumpTo = function (elId) {
+      setTimeout(function () {
+        const el = document.getElementById(elId);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+    };
+
+    // --- 4 boutons du pied de page ---
+    document.getElementById('navBtnDashboard').addEventListener('click', function () {
+      showView('dashboard');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    document.getElementById('navBtnHistory').addEventListener('click', function () {
+      showView('history');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    document.getElementById('navBtnEntry').addEventListener('click', function () {
+      showView('dashboard');
+      document.getElementById('navBtnEntry').classList.add('active');
+      const card = document.getElementById('composerCard');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('opAmountInput').focus();
+    });
+
+    // --- Reconnaissance vocale en brouillon ---
+    const SpeechApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognizer = null;
+    if (SpeechApi) {
+      recognizer = new SpeechApi();
+      recognizer.lang = 'fr-FR';
+      recognizer.interimResults = false;
+      recognizer.onstart = function () {
+        document.getElementById('draftStatusBanner').textContent = '🎤 Écoute en cours... ex. : « Dépense 5000 carburant mobile money ».';
+      };
+      recognizer.onresult = function (ev) {
+        const spoken = ev.results[0][0].transcript;
+        document.getElementById('draftStatusBanner').textContent = 'Brouillon vocal (non enregistré) : « ' + spoken + ' ».';
+        const low = spoken.toLowerCase();
+        document.getElementById('opTypeSelect').value = /(revenu|entrée|entree|salaire|reçu|recu|vente|gain)/i.test(low) ? 'income' : 'expense';
+        const m = low.replace(/\s+(?=\d{3})/g, '').match(/\d+([.,]\d+)?/);
+        if (m) document.getElementById('opAmountInput').value = m[0].replace(',', '.');
+        let wal = 'Espèces';
+        if (/(mobile money|momo|mtn|moov|celtiis|flooz)/i.test(low)) wal = 'Mobile Money';
+        else if (/(banque|carte|virement|chèque|cheque)/i.test(low)) wal = 'Banque';
+        document.getElementById('opWalletSelect').value = wal;
+        const clean = low
+          .replace(/(dépense|depense|revenu|entrée|entree|de|pour|par|en|francs|fcfa|euros|dollars)/gi, ' ')
+          .replace(/(mobile money|momo|mtn|moov|celtiis|flooz|banque|carte|virement|chèque|cheque|espèces|especes|cash|liquide)/gi, ' ')
+          .replace(/\d+([.,]\d+)?/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (clean) {
+          const cap = clean.charAt(0).toUpperCase() + clean.slice(1);
+          document.getElementById('opLabelInput').value = cap;
+          const gc = guessCategory(cap);
+          if (gc) document.getElementById('opCategorySelect').value = gc;
+        }
+        negConfirmed = false;
+        clearGuardAlert();
+      };
+      recognizer.onerror = function (ev) {
+        showGuardAlert('Micro : ' + ev.error, true);
+      };
+    } else {
+      ['btnStartVoiceDraft', 'btnRetryVoiceDraft', 'navBtnVoice'].forEach(function (id) {
+        const b = document.getElementById(id);
+        if (b) b.disabled = true;
+      });
+    }
+
+    function triggerVoiceRecording() {
+      if (!recognizer) return;
+      showView('dashboard');
+      document.getElementById('navBtnVoice').classList.add('active');
+      const card = document.getElementById('composerCard');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      clearGuardAlert();
+      recognizer.start();
+    }
+
+    document.getElementById('navBtnVoice').addEventListener('click', triggerVoiceRecording);
+    document.getElementById('btnStartVoiceDraft').addEventListener('click', triggerVoiceRecording);
+    document.getElementById('btnRetryVoiceDraft').addEventListener('click', function () {
+      resetDraft(true);
+      if (recognizer) recognizer.start();
+    });
+
+    // --- Sélecteur Journée / Semaine / Mois / Année ---
+    document.querySelectorAll('.tf-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        db.timeframe = btn.dataset.tf;
+        document.querySelectorAll('.tf-btn').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.tf === db.timeframe);
+        });
+        saveDb();
+        renderDashboard();
+      });
+    });
+
+    // --- Garde-fous & calcul ---
+    function showGuardAlert(msg, isErr) {
+      const box = document.getElementById('composerGuardAlert');
+      box.className = 'guard-msg ' + (isErr ? 'err' : 'warn');
+      box.textContent = msg;
+    }
+    function clearGuardAlert() {
+      const box = document.getElementById('composerGuardAlert');
+      box.className = 'guard-msg';
+      box.textContent = '';
+    }
+
+    function evalMath(raw) {
+      const c = String(raw || '').replace(/\s+/g, '').replace(',', '.');
+      if (!c || !/^[0-9+\-*/().]+$/.test(c)) return NaN;
+      try {
+        const r = Function('"use strict"; return (' + c + ')')();
+        return typeof r === 'number' && Number.isFinite(r) ? Number(r.toFixed(2)) : NaN;
+      } catch (_) { return NaN; }
+    }
+
+    function guessCategory(label) {
+      const low = String(label || '').toLowerCase();
+      for (const r of RULES) {
+        if (r.kw.some(function (k) { return low.includes(k); })) return r.cat;
+      }
       return null;
     }
 
-    const parsedInit = parseFloat(initialBalance);
-    const startBalance = Number.isFinite(parsedInit) ? Number(parsedInit.toFixed(2)) : 0;
-
-    const newEnv = {
-      id: 'env-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-      name: cleanName,
-      balance: startBalance
-    };
-
-    envelopes.push(newEnv);
-    localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, newEnv.id);
-    hideGuardAlert();
-    persistAndRender();
-    dom.inputEnvelope.value = newEnv.id;
-    return newEnv;
-  }
-
-  // Suppression sécurisée : interdit si dernière enveloppe ou si des opérations y sont liées
-  window.ftDeleteEnvelope = function (envId) {
-    hideGuardAlert();
-
-    if (envelopes.length <= 1) {
-      showGuardAlert('Suppression impossible : garde au moins une enveloppe active.', true);
-      return;
+    // --- Enveloppes physiques ---
+    function applyDeltaToEnvelope(envId, delta) {
+      const env = db.envelopes.find(function (e) { return e.id === envId; });
+      if (!env) return;
+      env.balance = Number(((Number(env.balance) || 0) + (Number(delta) || 0)).toFixed(2));
     }
 
-    const hasLinkedOperations = operations.some(function (op) {
-      return op.envelopeId === envId;
-    });
-
-    if (hasLinkedOperations) {
-      showGuardAlert(
-        'Suppression impossible : cette enveloppe contient déjà des opérations. Supprime ou déplace d\'abord ses opérations.',
-        true
-      );
-      return;
-    }
-
-    const targetEnv = envelopes.find(function (e) { return e.id === envId; });
-    envelopes = envelopes.filter(function (e) { return e.id !== envId; });
-
-    if (localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) === envId) {
-      localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, envelopes[0].id);
-    }
-
-    if (dom.inputEnvelope.value === envId) {
-      dom.inputEnvelope.value = envelopes[0].id;
-    }
-
-    persistAndRender();
-    dom.voiceFeedback.textContent =
-      'Enveloppe « ' + (targetEnv ? targetEnv.name : '') + ' » supprimée en toute sécurité.';
-  };
-
-  // Applique une variation (+ pour revenu, - pour dépense) à une enveloppe
-  function adjustEnvelopeBalance(envelopeId, delta) {
-    const env = envelopes.find(function (item) {
-      return item.id === envelopeId;
-    });
-    if (!env) return;
-    env.balance = Number(((Number(env.balance) || 0) + (Number(delta) || 0)).toFixed(2));
-  }
-
-  function renderEnvelopesCards() {
-    if (!envelopes.length) {
-      dom.envelopesCards.innerHTML = '<div style="color:#64748b; font-size:0.88rem;">Aucune enveloppe disponible.</div>';
-      return;
-    }
-
-    const canDeleteAny = envelopes.length > 1;
-
-    dom.envelopesCards.innerHTML = envelopes.map(function (env) {
-      const bal = Number(env.balance) || 0;
-      const color = bal < 0 ? '#dc2626' : '#15803d';
-      const hasOps = operations.some(function (op) { return op.envelopeId === env.id; });
-      const deleteBtnDisabled = !canDeleteAny || hasOps;
-      const deleteTitle = !canDeleteAny
-        ? 'Dernière enveloppe : suppression désactivée'
-        : (hasOps ? 'Enveloppe utilisée par des opérations' : 'Supprimer cette enveloppe');
-
-      return (
-        '<div style="border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; background:#f8fafc; display:flex; flex-direction:column; justify-content:space-between; gap:6px;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">' +
-            '<span style="font-size:0.84rem; font-weight:600; color:#334155; word-break:break-word;">' +
-              escapeHtml(env.name) +
-            '</span>' +
-            '<button type="button" onclick="ftDeleteEnvelope(\'' + escapeHtml(env.id) + '\')" ' +
-              (deleteBtnDisabled ? 'disabled ' : '') +
-              'title="' + escapeHtml(deleteTitle) + '" ' +
-              'style="border:1px solid ' + (deleteBtnDisabled ? '#e2e8f0' : '#fecaca') + '; background:' + (deleteBtnDisabled ? '#f1f5f9' : '#fef2f2') + '; color:' + (deleteBtnDisabled ? '#94a3b8' : '#b91c1c') + '; border-radius:6px; padding:2px 6px; font-size:0.75rem; cursor:' + (deleteBtnDisabled ? 'not-allowed' : 'pointer') + ';">' +
-              '✕' +
-            '</button>' +
-          '</div>' +
-          '<div style="font-size:1.08rem; font-weight:700; color:' + color + ';">' +
-            formatNumber(bal) +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
-  }
-
-  function renderEnvelopeSelect() {
-    const preferredId =
-      dom.inputEnvelope.value ||
-      localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) ||
-      (envelopes[0] ? envelopes[0].id : '');
-
-    dom.inputEnvelope.innerHTML = envelopes.map(function (env) {
-      return (
-        '<option value="' + escapeHtml(env.id) + '">' +
-          escapeHtml(env.name) + ' (' + formatNumber(env.balance) + ')' +
-        '</option>'
-      );
-    }).join('');
-
-    if (preferredId && envelopes.some(function (e) { return e.id === preferredId; })) {
-      dom.inputEnvelope.value = preferredId;
-    }
-  }
-
-  // --- Gestion du brouillon ---
-  function clearDraft(keepVoiceMessage) {
-    editingOperationId = null;
-    awaitingNegativeConfirm = false;
-
-    dom.inputType.value = 'expense';
-    dom.inputAmount.value = '';
-    dom.inputWallet.value = 'Espèces';
-    dom.inputLabel.value = '';
-    dom.inputReceipt.value = '';
-    draftAttachment = null;
-    renderAttachmentPreview(null);
-
-    dom.draftBadge.textContent = 'Brouillon : Nouvelle opération';
-    dom.draftBadge.style.background = '#eff6ff';
-    dom.draftBadge.style.color = '#1d4ed8';
-    dom.btnCancelEdit.style.display = 'none';
-
-    renderEnvelopeSelect();
-    hideGuardAlert();
-
-    if (!keepVoiceMessage) {
-      dom.voiceFeedback.textContent = 'Brouillon effacé. Aucune donnée n\'a été enregistrée.';
-    }
-  }
-
-  // --- Enregistrement (création ou mise à jour) avec garde-fous ---
-  function saveOperationFromDraft() {
-    hideGuardAlert();
-
-    const type = dom.inputType.value === 'income' ? 'income' : 'expense';
-    const amount = parseFloat(dom.inputAmount.value);
-    const wallet = dom.inputWallet.value || 'Espèces';
-    const envelopeId = dom.inputEnvelope.value;
-    const rawLabel = String(dom.inputLabel.value || '').trim();
-    const label = rawLabel || (type === 'income' ? 'Revenu' : 'Dépense');
-
-    // Garde-fou 1 : montant strictement positif
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showGuardAlert('Erreur : le montant doit être un nombre supérieur à 0.', true);
-      return;
-    }
-
-    // Garde-fou 2 : enveloppe obligatoire
-    const targetEnvelope = envelopes.find(function (e) { return e.id === envelopeId; });
-    if (!targetEnvelope) {
-      showGuardAlert('Erreur : sélectionne ou crée une enveloppe valide.', true);
-      return;
-    }
-
-    const newDelta = type === 'income' ? amount : -amount;
-    const existingOp = editingOperationId
-      ? operations.find(function (o) { return o.id === editingOperationId; })
-      : null;
-
-    // Calcul du solde projeté de l'enveloppe après opération
-    let projectedBalance = (Number(targetEnvelope.balance) || 0) + newDelta;
-    if (existingOp && existingOp.envelopeId === envelopeId) {
-      const oldDelta = existingOp.type === 'income' ? existingOp.amount : -existingOp.amount;
-      projectedBalance = (Number(targetEnvelope.balance) || 0) - oldDelta + newDelta;
-    }
-
-    // Garde-fou 3 : avertissement non bloquant si une dépense fait passer l'enveloppe en négatif
-    if (type === 'expense' && projectedBalance < 0 && !awaitingNegativeConfirm) {
-      awaitingNegativeConfirm = true;
-      showGuardAlert(
-        'Attention : cette dépense fera passer l\'enveloppe « ' +
-          targetEnvelope.name +
-          ' » à ' +
-          formatNumber(projectedBalance) +
-          '. Clique à nouveau sur « Enregistrer l\'opération » pour confirmer.',
-        false
-      );
-      return;
-    }
-
-    awaitingNegativeConfirm = false;
-
-    if (existingOp) {
-      // Modification : annuler l'ancien impact sur l'ancienne enveloppe, puis appliquer le nouveau
-      const oldDelta = existingOp.type === 'income' ? existingOp.amount : -existingOp.amount;
-      adjustEnvelopeBalance(existingOp.envelopeId, -oldDelta);
-      adjustEnvelopeBalance(envelopeId, newDelta);
-
-      existingOp.type = type;
-      existingOp.amount = amount;
-      existingOp.wallet = wallet;
-      existingOp.envelopeId = envelopeId;
-      existingOp.label = label;
-      existingOp.attachment = draftAttachment;
-      existingOp.updatedAt = new Date().toISOString();
-
-      lastCreatedOperationId = null;
-      dom.voiceFeedback.textContent = 'Opération modifiée et solde des enveloppes recalculé.';
-    } else {
-      // Création : mettre à jour l'enveloppe (+ pour revenu, - pour dépense)
-      adjustEnvelopeBalance(envelopeId, newDelta);
-
-      const newOp = {
-        id: 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-        type: type,
-        amount: amount,
-        wallet: wallet,
-        envelopeId: envelopeId,
-        label: label,
-        attachment: draftAttachment,
-        date: new Date().toISOString()
+    document.getElementById('btnCreateEnvelope').addEventListener('click', function () {
+      const nInp = document.getElementById('envNewName');
+      const iInp = document.getElementById('envNewInit');
+      const name = String(nInp.value || '').trim();
+      if (!name) { alert('Saisissez un nom d\'enveloppe.'); return; }
+      const init = parseFloat(iInp.value);
+      const env = {
+        id: 'env-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+        name: name,
+        balance: Number.isFinite(init) ? Number(init.toFixed(2)) : 0
       };
-
-      operations.unshift(newOp);
-      lastCreatedOperationId = newOp.id;
-      dom.voiceFeedback.textContent =
-        (type === 'income' ? 'Revenu (+' : 'Dépense (-') +
-        formatNumber(amount) +
-        ' • ' + wallet + ') enregistré dans « ' +
-        targetEnvelope.name +
-        ' ».';
-    }
-
-    localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, envelopeId);
-    persistAndRender();
-    clearDraft(true);
-  }
-
-  // --- Annulation rapide de la dernière opération ---
-  function undoLastOperation() {
-    if (!lastCreatedOperationId) return;
-    const idx = operations.findIndex(function (o) { return o.id === lastCreatedOperationId; });
-    if (idx !== -1) {
-      const op = operations[idx];
-      const delta = op.type === 'income' ? op.amount : -op.amount;
-      adjustEnvelopeBalance(op.envelopeId, -delta);
-      operations.splice(idx, 1);
-    }
-    lastCreatedOperationId = null;
-    persistAndRender();
-    dom.voiceFeedback.textContent = 'Dernière opération annulée ; l\'enveloppe a retrouvé son solde précédent.';
-  }
-
-  // --- Édition et suppression depuis l'historique ---
-  window.ftEditOperation = function (opId) {
-    const op = operations.find(function (o) { return o.id === opId; });
-    if (!op) return;
-
-    editingOperationId = op.id;
-    awaitingNegativeConfirm = false;
-    hideGuardAlert();
-
-    dom.inputType.value = op.type;
-    dom.inputAmount.value = op.amount;
-    dom.inputWallet.value = op.wallet || 'Espèces';
-    renderEnvelopeSelect();
-    if (envelopes.some(function (e) { return e.id === op.envelopeId; })) {
-      dom.inputEnvelope.value = op.envelopeId;
-    }
-    dom.inputLabel.value = op.label;
-
-    draftAttachment = op.attachment || null;
-    dom.inputReceipt.value = '';
-    renderAttachmentPreview(draftAttachment);
-
-    dom.draftBadge.textContent = 'Brouillon : Modification en cours';
-    dom.draftBadge.style.background = '#fef3c7';
-    dom.draftBadge.style.color = '#92400e';
-    dom.btnCancelEdit.style.display = 'inline-block';
-    dom.voiceFeedback.textContent = 'Modifie les champs puis clique sur « Enregistrer l\'opération ».';
-  };
-
-  window.ftDeleteOperation = function (opId) {
-    const idx = operations.findIndex(function (o) { return o.id === opId; });
-    if (idx === -1) return;
-
-    const op = operations[idx];
-    // Inverse l'effet de l'opération supprimée sur l'enveloppe
-    const delta = op.type === 'income' ? op.amount : -op.amount;
-    adjustEnvelopeBalance(op.envelopeId, -delta);
-
-    operations.splice(idx, 1);
-    if (lastCreatedOperationId === opId) lastCreatedOperationId = null;
-    if (editingOperationId === opId) clearDraft(true);
-
-    persistAndRender();
-    dom.voiceFeedback.textContent = 'Opération supprimée et solde de l\'enveloppe recalculé.';
-  };
-
-  window.ftOpenOperationReceipt = function (opId) {
-    const op = operations.find(function (o) { return o.id === opId; });
-    if (!op || !op.attachment || !op.attachment.data) return;
-
-    const popup = window.open('', '_blank');
-    if (!popup) {
-      showGuardAlert('Autorise les fenêtres contextuelles (pop-ups) pour afficher le justificatif.', true);
-      return;
-    }
-
-    if (op.attachment.type === 'pdf') {
-      popup.document.write(
-        '<!doctype html><html><head><title>' + escapeHtml(op.attachment.name || 'Justificatif PDF') + '</title></head>' +
-        '<body style="margin:0;height:100vh;"><iframe src="' + op.attachment.data + '" style="width:100%;height:100%;border:0;"></iframe></body></html>'
-      );
-    } else {
-      popup.document.write(
-        '<!doctype html><html><head><title>' + escapeHtml(op.attachment.name || 'Justificatif photo') + '</title></head>' +
-        '<body style="margin:16px;background:#0f172a;display:flex;justify-content:center;align-items:flex-start;">' +
-        '<img src="' + op.attachment.data + '" style="max-width:100%;height:auto;border-radius:8px;" /></body></html>'
-      );
-    }
-    popup.document.close();
-  };
-
-  function renderHistoryList() {
-    if (!operations.length) {
-      dom.historyList.innerHTML = '<div style="font-size:0.86rem; color:#64748b;">Aucune opération enregistrée pour le moment.</div>';
-      return;
-    }
-
-    dom.historyList.innerHTML = operations.slice(0, 25).map(function (op) {
-      const env = envelopes.find(function (e) { return e.id === op.envelopeId; });
-      const envName = env ? env.name : 'Enveloppe supprimée';
-      const walletName = op.wallet || 'Espèces';
-      const isIncome = op.type === 'income';
-      const sign = isIncome ? '+' : '-';
-      const amountColor = isIncome ? '#15803d' : '#dc2626';
-
-      const receiptBtn = op.attachment
-        ? '<button type="button" onclick="ftOpenOperationReceipt(\'' + escapeHtml(op.id) + '\')" style="padding:3px 8px; border:none; border-radius:6px; background:#e2e8f0; color:#0f172a; cursor:pointer; font-size:0.78rem;">📎 Justificatif</button>'
-        : '';
-
-      return (
-        '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#ffffff;">' +
-          '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
-            '<strong style="font-size:0.9rem;">' + escapeHtml(op.label) + '</strong>' +
-            '<span style="font-size:0.8rem; color:#64748b;">• ' + escapeHtml(envName) + ' (' + escapeHtml(walletName) + ')</span>' +
-            receiptBtn +
-          '</div>' +
-          '<div style="display:flex; align-items:center; gap:8px;">' +
-            '<span style="font-weight:700; color:' + amountColor + '; font-size:0.92rem;">' +
-              sign + formatNumber(op.amount) +
-            '</span>' +
-            '<button type="button" onclick="ftEditOperation(\'' + escapeHtml(op.id) + '\')" style="padding:4px 9px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; cursor:pointer; font-size:0.8rem;">Éditer</button>' +
-            '<button type="button" onclick="ftDeleteOperation(\'' + escapeHtml(op.id) + '\')" style="padding:4px 9px; border:1px solid #fecaca; border-radius:6px; background:#fef2f2; color:#b91c1c; cursor:pointer; font-size:0.8rem;">Supprimer</button>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
-  }
-
-  // --- Saisie vocale intelligente (Type, Montant, Portefeuille, Libellé en brouillon) ---
-  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recognition = null;
-
-  if (SpeechRecognitionCtor) {
-    recognition = new SpeechRecognitionCtor();
-    recognition.lang = 'fr-FR';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = function () {
-      dom.btnVoiceStart.style.opacity = '0.7';
-      dom.voiceFeedback.textContent =
-        'Écoute en cours... ex. : « Dépense 4500 carburant mobile money » ou « Revenu 50000 salaire banque ».';
-    };
-
-    recognition.onresult = function (event) {
-      const transcript = event.results[0][0].transcript;
-      dom.voiceFeedback.textContent =
-        'Entendu (brouillon non enregistré) : « ' + transcript + ' » — vérifie puis clique sur Enregistrer.';
-      applyVoiceTranscriptToDraft(transcript);
-    };
-
-    recognition.onerror = function (event) {
-      showGuardAlert('Reconnaissance vocale : ' + event.error, true);
-    };
-
-    recognition.onend = function () {
-      dom.btnVoiceStart.style.opacity = '1';
-    };
-  } else {
-    dom.btnVoiceStart.disabled = true;
-    dom.btnVoiceRetry.disabled = true;
-    dom.voiceFeedback.textContent = 'Saisie vocale non prise en charge sur ce navigateur ; utilise la saisie classique en brouillon.';
-  }
-
-  function applyVoiceTranscriptToDraft(transcript) {
-    const lower = String(transcript || '').toLowerCase();
-
-    // 1. Type : revenu vs dépense
-    const isIncome = /(revenu|entrée|entree|salaire|reçu|recu|vente|gain)/i.test(lower);
-    dom.inputType.value = isIncome ? 'income' : 'expense';
-
-    // 2. Montant (gère les espaces dans les grands nombres comme "15 000")
-    const normalizedNumbers = lower.replace(/\s+(?=\d{3})/g, '');
-    const amountMatch = normalizedNumbers.match(/\d+([.,]\d+)?/);
-    if (amountMatch) {
-      dom.inputAmount.value = amountMatch[0].replace(',', '.');
-    }
-
-    // 3. Portefeuille : Mobile Money, Banque ou Espèces
-    let detectedWallet = 'Espèces';
-    if (/(mobile money|momo|mtn|moov|celtiis|flooz)/i.test(lower)) {
-      detectedWallet = 'Mobile Money';
-    } else if (/(banque|carte|virement|chèque|cheque)/i.test(lower)) {
-      detectedWallet = 'Banque';
-    }
-    dom.inputWallet.value = detectedWallet;
-
-    // 4. Libellé nettoyé (retire mots-clés de type, devise, montant et portefeuille)
-    const cleanedLabel = lower
-      .replace(/(dépense|depense|revenu|entrée|entree|de|pour|par|en|francs|fcfa|euros|dollars)/gi, ' ')
-      .replace(/(mobile money|momo|mtn|moov|celtiis|flooz|banque|carte|virement|chèque|cheque|espèces|especes|cash|liquide)/gi, ' ')
-      .replace(/\d+([.,]\d+)?/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (cleanedLabel) {
-      dom.inputLabel.value = cleanedLabel.charAt(0).toUpperCase() + cleanedLabel.slice(1);
-    }
-
-    awaitingNegativeConfirm = false;
-    hideGuardAlert();
-  }
-
-  // --- Justificatifs : compression image via Canvas, PDF ≤ 1,5 Mo & retrait du brouillon ---
-  window.ftRemoveDraftAttachment = function () {
-    draftAttachment = null;
-    dom.inputReceipt.value = '';
-    renderAttachmentPreview(null);
-    hideGuardAlert();
-  };
-
-  function renderAttachmentPreview(att) {
-    if (!att || !att.data) {
-      dom.receiptPreviewBox.innerHTML = '';
-      return;
-    }
-
-    const removeBtn =
-      '<button type="button" onclick="ftRemoveDraftAttachment()" ' +
-      'style="margin-left:8px; padding:2px 8px; border:1px solid #cbd5e1; border-radius:6px; background:#ffffff; color:#0f172a; cursor:pointer; font-size:0.78rem;">' +
-      'Retirer</button>';
-
-    if (att.type === 'pdf') {
-      dom.receiptPreviewBox.innerHTML =
-        '<div style="display:flex; align-items:center; flex-wrap:wrap;">' +
-          '<span>📄 PDF joint : <strong>' + escapeHtml(att.name || 'document.pdf') + '</strong></span>' +
-          removeBtn +
-        '</div>';
-    } else {
-      dom.receiptPreviewBox.innerHTML =
-        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
-          '<img src="' + att.data + '" alt="Aperçu justificatif" style="height:46px; width:auto; border-radius:6px; border:1px solid #cbd5e1;" />' +
-          '<span>Photo compressée prête</span>' +
-          removeBtn +
-        '</div>';
-    }
-  }
-
-  function compressImageFile(file, maxWidth, quality) {
-    return new Promise(function (resolve, reject) {
-      const reader = new FileReader();
-      reader.onload = function (ev) {
-        const img = new Image();
-        img.onload = function () {
-          let width = img.width;
-          let height = img.height;
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = reject;
-        img.src = ev.target.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      db.envelopes.push(env);
+      nInp.value = '';
+      iInp.value = '0';
+      saveDb();
+      renderDashboard();
+      document.getElementById('opEnvelopeSelect').value = env.id;
     });
-  }
 
-  dom.inputReceipt.addEventListener('change', async function (e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) {
-      draftAttachment = null;
-      renderAttachmentPreview(null);
-      return;
-    }
-
-    hideGuardAlert();
-
-    if (file.type === 'application/pdf') {
-      const maxPdfBytes = 1.5 * 1024 * 1024;
-      if (file.size > maxPdfBytes) {
-        showGuardAlert('Le fichier PDF dépasse 1,5 Mo. Choisis un fichier plus léger pour préserver le stockage local.', true);
-        e.target.value = '';
-        draftAttachment = null;
-        renderAttachmentPreview(null);
+    window.deleteEnvelopeIfUnused = function (envId) {
+      if (db.envelopes.length <= 1) { alert('Suppression impossible : au moins une enveloppe est requise.'); return; }
+      if (db.operations.some(function (o) { return o.envelopeId === envId; })) {
+        alert('Suppression impossible : cette enveloppe contient déjà des opérations.');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = function () {
-        draftAttachment = {
-          name: file.name,
-          type: 'pdf',
-          data: reader.result
+      db.envelopes = db.envelopes.filter(function (e) { return e.id !== envId; });
+      saveDb();
+      renderDashboard();
+    };
+
+    // --- Justificatifs ---
+    function compressImage(file, maxW, quality) {
+      return new Promise(function (resolve, reject) {
+        const rd = new FileReader();
+        rd.onload = function (ev) {
+          const img = new Image();
+          img.onload = function () {
+            let w = img.width, h = img.height;
+            if (w > maxW) { h = Math.round((h * maxW) / w); w = maxW; }
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            cv.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(cv.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+          img.src = ev.target.result;
         };
-        renderAttachmentPreview(draftAttachment);
-      };
-      reader.readAsDataURL(file);
-    } else if (file.type && file.type.startsWith('image/')) {
-      try {
-        const compressedDataUrl = await compressImageFile(file, 1000, 0.72);
-        draftAttachment = {
-          name: file.name,
-          type: 'image',
-          data: compressedDataUrl
-        };
-        renderAttachmentPreview(draftAttachment);
-      } catch (_) {
-        showGuardAlert('Impossible de compresser cette image.', true);
+        rd.onerror = reject;
+        rd.readAsDataURL(file);
+      });
+    }
+
+    function renderReceiptPreview(att) {
+      const box = document.getElementById('opReceiptBox');
+      if (!att || !att.data) { box.innerHTML = ''; return; }
+      const btn = '<button type="button" class="btn btn-soft btn-sm" style="margin-left:6px;" onclick="removeDraftReceipt()">Retirer</button>';
+      if (att.type === 'pdf') box.innerHTML = '📄 PDF : <strong>' + esc(att.name) + '</strong>' + btn;
+      else box.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><img src="' + att.data + '" style="height:36px;border-radius:5px;" />Photo compressée' + btn + '</span>';
+    }
+
+    window.removeDraftReceipt = function () {
+      draftAtt = null;
+      document.getElementById('opReceiptInput').value = '';
+      renderReceiptPreview(null);
+      clearGuardAlert();
+    };
+
+    document.getElementById('opReceiptInput').addEventListener('change', async function (e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) { draftAtt = null; renderReceiptPreview(null); return; }
+      clearGuardAlert();
+      if (file.type === 'application/pdf') {
+        if (file.size > 1.5 * 1024 * 1024) {
+          showGuardAlert('PDF > 1,5 Mo : choisissez un fichier plus léger.', true);
+          e.target.value = '';
+          return;
+        }
+        const r = new FileReader();
+        r.onload = function () { draftAtt = { name: file.name, type: 'pdf', data: r.result }; renderReceiptPreview(draftAtt); };
+        r.readAsDataURL(file);
+      } else if (file.type && file.type.startsWith('image/')) {
+        try {
+          const dUrl = await compressImage(file, 1000, 0.72);
+          draftAtt = { name: file.name, type: 'image', data: dUrl };
+          renderReceiptPreview(draftAtt);
+        } catch (_) { showGuardAlert('Erreur de compression image.', true); }
+      } else {
+        showGuardAlert('Format non pris en charge (photo ou PDF).', true);
+        e.target.value = '';
       }
-    } else {
-      showGuardAlert('Format non pris en charge. Choisis une photo (JPG/PNG/WebP) ou un fichier PDF.', true);
-      e.target.value = '';
-    }
-  });
-
-  // --- Branchements des boutons ---
-  dom.btnAddEnv.addEventListener('click', function () {
-    const created = createEnvelope(dom.newEnvName.value, dom.newEnvInitial.value);
-    if (created) {
-      dom.newEnvName.value = '';
-      dom.newEnvInitial.value = '0';
-    }
-  });
-
-  dom.btnVoiceStart.addEventListener('click', function () {
-    if (recognition) {
-      hideGuardAlert();
-      recognition.start();
-    }
-  });
-
-  dom.btnVoiceRetry.addEventListener('click', function () {
-    clearDraft(true);
-    if (recognition) {
-      recognition.start();
-    }
-  });
-
-  dom.btnDraftClear.addEventListener('click', function () {
-    clearDraft(false);
-  });
-
-  dom.btnSaveOperation.addEventListener('click', saveOperationFromDraft);
-  dom.btnCancelEdit.addEventListener('click', function () {
-    clearDraft(false);
-  });
-  dom.btnUndoLastOp.addEventListener('click', undoLastOperation);
-
-  // Réinitialise la demande de double confirmation si l'utilisateur modifie le brouillon
-  [dom.inputType, dom.inputAmount, dom.inputWallet, dom.inputEnvelope].forEach(function (el) {
-    el.addEventListener('input', function () {
-      awaitingNegativeConfirm = false;
-      hideGuardAlert();
     });
-    el.addEventListener('change', function () {
-      awaitingNegativeConfirm = false;
-      hideGuardAlert();
-    });
-  });
 
-  // --- API globale pour Export / Import JSON complet ---
-  window.FinTrackSmartBackup = {
-    getPayload: function () {
-      return {
-        envelopes: loadJsonArray(STORAGE_KEYS.envelopes),
-        smartOperations: loadJsonArray(STORAGE_KEYS.operations),
-        lastEnvelopeId: localStorage.getItem(STORAGE_KEYS.lastEnvelopeId) || null
-      };
-    },
-    restorePayload: function (payload) {
-      if (!payload || typeof payload !== 'object') return;
-      if (Array.isArray(payload.envelopes)) {
-        localStorage.setItem(STORAGE_KEYS.envelopes, JSON.stringify(payload.envelopes));
+    function resetDraft(keepBanner) {
+      editingOpId = null;
+      negConfirmed = false;
+      document.getElementById('composerTitle').textContent = 'Nouvelle opération / Brouillon';
+      document.getElementById('btnCancelEditOp').style.display = 'none';
+      document.getElementById('opTypeSelect').value = 'expense';
+      document.getElementById('opAmountInput').value = '';
+      document.getElementById('opLabelInput').value = '';
+      document.getElementById('opSubcatInput').value = '';
+      document.getElementById('opWalletSelect').value = 'Espèces';
+      document.getElementById('opDateInput').value = new Date().toISOString().slice(0, 10);
+      draftAtt = null;
+      document.getElementById('opReceiptInput').value = '';
+      renderReceiptPreview(null);
+      clearGuardAlert();
+      if (!keepBanner) {
+        document.getElementById('draftStatusBanner').textContent = 'Brouillon effacé — rien n\'a été enregistré.';
       }
-      if (Array.isArray(payload.smartOperations)) {
-        localStorage.setItem(STORAGE_KEYS.operations, JSON.stringify(payload.smartOperations));
+    }
+
+    document.getElementById('btnClearDraftForm').addEventListener('click', function () { resetDraft(false); });
+    document.getElementById('btnCancelEditOp').addEventListener('click', function () { resetDraft(false); });
+    document.getElementById('opLabelInput').addEventListener('input', function (e) {
+      const gc = guessCategory(e.target.value);
+      if (gc) document.getElementById('opCategorySelect').value = gc;
+    });
+
+    // --- Enregistrement / Édition / Suppression / Annulation ---
+    document.getElementById('btnSaveOperation').addEventListener('click', function () {
+      clearGuardAlert();
+      const amount = evalMath(document.getElementById('opAmountInput').value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showGuardAlert('Montant invalide : saisissez un montant strictement supérieur à 0.', true);
+        return;
       }
-      if (payload.lastEnvelopeId) {
-        localStorage.setItem(STORAGE_KEYS.lastEnvelopeId, payload.lastEnvelopeId);
+
+      const type = document.getElementById('opTypeSelect').value === 'income' ? 'income' : 'expense';
+      const envId = document.getElementById('opEnvelopeSelect').value;
+      const env = db.envelopes.find(function (e) { return e.id === envId; });
+      if (!env) { showGuardAlert('Sélectionnez une enveloppe.', true); return; }
+
+      const label = String(document.getElementById('opLabelInput').value || '').trim() || (type === 'income' ? 'Revenu' : 'Dépense');
+      const category = document.getElementById('opCategorySelect').value || 'Autres';
+      const subcat = String(document.getElementById('opSubcatInput').value || '').trim();
+      const wallet = document.getElementById('opWalletSelect').value || 'Espèces';
+      const dateStr = document.getElementById('opDateInput').value || new Date().toISOString().slice(0, 10);
+
+      const existing = editingOpId ? db.operations.find(function (o) { return o.id === editingOpId; }) : null;
+      const newD = type === 'income' ? amount : -amount;
+      let nextBal = (Number(env.balance) || 0) + newD;
+      if (existing && existing.envelopeId === envId) {
+        const oldD = existing.type === 'income' ? existing.amount : -existing.amount;
+        nextBal = (Number(env.balance) || 0) - oldD + newD;
       }
-      envelopes = loadJsonArray(STORAGE_KEYS.envelopes);
-      if (envelopes.length === 0) {
-        envelopes = [{ id: 'env-default-portefeuille', name: 'Portefeuille', balance: 0 }];
+
+      if (type === 'expense' && nextBal < 0 && !negConfirmed) {
+        negConfirmed = true;
+        showGuardAlert(
+          'Alerte : cette dépense fera passer « ' + env.name + ' » à ' + fmtMoney(nextBal) +
+          '. Cliquez encore sur « Enregistrer l\'opération » pour confirmer.',
+          false
+        );
+        return;
       }
-      operations = loadJsonArray(STORAGE_KEYS.operations);
-      lastCreatedOperationId = null;
-      clearDraft(false);
-      persistAndRender();
-    },
-    buildFullBackup: function (existingAppData) {
-      return Object.assign({}, existingAppData || {}, {
-        smartModule: this.getPayload(),
+      negConfirmed = false;
+
+      if (existing) {
+        const oldD = existing.type === 'income' ? existing.amount : -existing.amount;
+        applyDeltaToEnvelope(existing.envelopeId, -oldD);
+        applyDeltaToEnvelope(envId, newD);
+        existing.type = type;
+        existing.amount = amount;
+        existing.label = label;
+        existing.category = category;
+        existing.subcategory = subcat;
+        existing.wallet = wallet;
+        existing.envelopeId = envId;
+        existing.date = dateStr;
+        existing.attachment = draftAtt;
+        db.lastCreatedId = null;
+      } else {
+        applyDeltaToEnvelope(envId, newD);
+        const id = 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5);
+        db.operations.unshift({
+          id: id,
+          type: type,
+          amount: amount,
+          label: label,
+          category: category,
+          subcategory: subcat,
+          wallet: wallet,
+          envelopeId: envId,
+          date: dateStr,
+          attachment: draftAtt
+        });
+        db.lastCreatedId = id;
+      }
+
+      saveDb();
+      resetDraft(true);
+      renderDashboard();
+    });
+
+    document.getElementById('btnUndoLastCreated').addEventListener('click', function () {
+      if (!db.lastCreatedId) return;
+      const idx = db.operations.findIndex(function (o) { return o.id === db.lastCreatedId; });
+      if (idx !== -1) {
+        const op = db.operations[idx];
+        applyDeltaToEnvelope(op.envelopeId, op.type === 'income' ? -op.amount : op.amount);
+        db.operations.splice(idx, 1);
+      }
+      db.lastCreatedId = null;
+      saveDb();
+      renderDashboard();
+    });
+
+    window.editOperationById = function (id) {
+      const op = db.operations.find(function (o) { return o.id === id; });
+      if (!op) return;
+      showView('dashboard');
+      editingOpId = op.id;
+      negConfirmed = false;
+      document.getElementById('composerTitle').textContent = 'Modifier l\'opération';
+      document.getElementById('btnCancelEditOp').style.display = 'inline-flex';
+      document.getElementById('opTypeSelect').value = op.type;
+      document.getElementById('opAmountInput').value = op.amount;
+      document.getElementById('opLabelInput').value = op.label;
+      document.getElementById('opCategorySelect').value = op.category || 'Autres';
+      document.getElementById('opSubcatInput').value = op.subcategory || '';
+      document.getElementById('opWalletSelect').value = op.wallet || 'Espèces';
+      if (db.envelopes.some(function (e) { return e.id === op.envelopeId; })) document.getElementById('opEnvelopeSelect').value = op.envelopeId;
+      document.getElementById('opDateInput').value = (op.date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+      draftAtt = op.attachment || null;
+      renderReceiptPreview(draftAtt);
+      jumpTo('composerCard');
+    };
+
+    window.deleteOperationById = function (id) {
+      const idx = db.operations.findIndex(function (o) { return o.id === id; });
+      if (idx === -1) return;
+      const op = db.operations[idx];
+      applyDeltaToEnvelope(op.envelopeId, op.type === 'income' ? -op.amount : op.amount);
+      db.operations.splice(idx, 1);
+      if (db.lastCreatedId === id) db.lastCreatedId = null;
+      if (editingOpId === id) resetDraft(true);
+      saveDb();
+      renderDashboard();
+    };
+
+    window.viewReceiptById = function (id) {
+      const op = db.operations.find(function (o) { return o.id === id; });
+      if (!op || !op.attachment || !op.attachment.data) return;
+      const w = window.open('', '_blank');
+      if (!w) return;
+      if (op.attachment.type === 'pdf') w.document.write('<iframe src="' + op.attachment.data + '" style="width:100%;height:100%;border:0;"></iframe>');
+      else w.document.write('<img src="' + op.attachment.data + '" style="max-width:100%;height:auto;" />');
+    };
+
+    // --- Filtrage Journée / Semaine / Mois / Année ---
+    function matchesTimeframe(dStr) {
+      const d = new Date(dStr);
+      if (Number.isNaN(d.getTime())) return true;
+      const now = new Date();
+      if (db.timeframe === 'today') return d.toDateString() === now.toDateString();
+      if (db.timeframe === 'week') return (now - d) / 86400000 <= 7;
+      if (db.timeframe === 'year') return d.getFullYear() === now.getFullYear();
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+
+    function periodLabelText() {
+      if (db.timeframe === 'today') return 'de la journée';
+      if (db.timeframe === 'week') return 'de la semaine';
+      if (db.timeframe === 'year') return 'de l\'année';
+      return 'du mois';
+    }
+
+    function renderDashboard() {
+      const cSel = document.getElementById('opCategorySelect');
+      const pc = cSel.value;
+      cSel.innerHTML = CATEGORIES.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+      if (pc) cSel.value = pc;
+
+      const hSel = document.getElementById('histCategoryFilter');
+      const ph = hSel.value;
+      hSel.innerHTML = '<option value="ALL">Toutes catégories</option>' + CATEGORIES.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+      if (ph) hSel.value = ph;
+
+      const eSel = document.getElementById('opEnvelopeSelect');
+      const pe = eSel.value;
+      eSel.innerHTML = db.envelopes.map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.name) + ' (' + fmtMoney(e.balance) + ')</option>'; }).join('');
+      if (pe && db.envelopes.some(function (e) { return e.id === pe; })) eSel.value = pe;
+
+      const canDel = db.envelopes.length > 1;
+      const envCardsHtml = db.envelopes.map(function (env) {
+        const bal = Number(env.balance) || 0;
+        const used = db.operations.some(function (o) { return o.envelopeId === env.id; });
+        const dis = !canDel || used;
+        return (
+          '<div style="border:1px solid var(--wa-line);border-radius:10px;padding:10px 12px;background:var(--wa-soft);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">' +
+              '<strong style="font-size:0.86rem;">' + esc(env.name) + '</strong>' +
+              '<button type="button" ' + (dis ? 'disabled ' : '') + 'onclick="deleteEnvelopeIfUnused(\'' + esc(env.id) + '\')" ' +
+                'style="border:none;background:var(--danger-bg);color:var(--danger);border-radius:6px;padding:2px 6px;font-size:0.74rem;cursor:' + (dis ? 'not-allowed' : 'pointer') + ';">✕</button>' +
+            '</div>' +
+            '<div style="font-size:1.06rem;font-weight:800;margin-top:4px;color:' + (bal < 0 ? 'var(--danger)' : 'var(--ok)') + ';">' + fmtMoney(bal) + '</div>' +
+          '</div>'
+        );
+      }).join('');
+      document.getElementById('dashEnvelopesGrid').innerHTML = envCardsHtml;
+      document.getElementById('extraEnvelopesGrid').innerHTML = envCardsHtml;
+
+      const treasury = db.envelopes.reduce(function (s, e) { return s + (Number(e.balance) || 0); }, 0);
+      const tfOps = db.operations.filter(function (o) { return matchesTimeframe(o.date); });
+      const inc = tfOps.filter(function (o) { return o.type === 'income'; }).reduce(function (s, o) { return s + o.amount; }, 0);
+      const exp = tfOps.filter(function (o) { return o.type === 'expense'; }).reduce(function (s, o) { return s + o.amount; }, 0);
+      const savRate = inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0;
+
+      const now = new Date();
+      const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const remDays = Math.max(1, dim - now.getDate() + 1);
+      const avgDay = exp / Math.max(1, now.getDate());
+      const daily = treasury > 0 ? treasury / remDays : 0;
+      const score = Math.max(0, Math.min(100, 50 + savRate + (treasury >= 0 ? 15 : -25)));
+
+      document.getElementById('dashPeriodHeading').textContent = 'Récapitulatif ' + periodLabelText();
+      document.getElementById('dashSummaryText').textContent =
+        'Trésorerie : ' + fmtMoney(treasury) + ' • Revenus ' + periodLabelText() + ' : ' + fmtMoney(inc) +
+        ' • Dépenses ' + periodLabelText() + ' : ' + fmtMoney(exp) + ' • Épargne : ' + savRate + ' %.';
+
+      document.getElementById('dTreasury').textContent = fmtMoney(treasury);
+      document.getElementById('dAutonomy').textContent = 'Autonomie : ' + (avgDay > 0 ? Math.floor(treasury / avgDay) + ' jours' : 'stable');
+      document.getElementById('dIncome').textContent = fmtMoney(inc);
+      document.getElementById('dSavings').textContent = savRate + ' %';
+      document.getElementById('dExpense').textContent = fmtMoney(exp);
+      document.getElementById('dAvgDay').textContent = 'Moyenne : ' + fmtMoney(avgDay) + '/jour';
+      document.getElementById('dDaily').textContent = fmtMoney(daily);
+      document.getElementById('dScore').textContent = score + ' / 100';
+      document.getElementById('headerSummary').textContent = db.envelopes.length + ' enveloppe(s) • ' + fmtMoney(treasury);
+      document.getElementById('btnUndoLastCreated').style.display = db.lastCreatedId ? 'inline-flex' : 'none';
+
+      document.getElementById('dashIncExpChart').innerHTML =
+        '<div style="display:flex;justify-content:space-between;font-size:0.84rem;"><span>Revenus</span><strong style="color:var(--ok);">' + fmtMoney(inc) + '</strong></div>' +
+        '<div class="meter-bg"><div class="meter-fill" style="width:' + (inc > 0 ? 100 : 0) + '%;"></div></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-top:8px;"><span>Dépenses</span><strong style="color:var(--danger);">' + fmtMoney(exp) + '</strong></div>' +
+        '<div class="meter-bg"><div class="meter-fill" style="background:var(--danger);width:' + Math.min(100, inc > 0 ? (exp / inc) * 100 : (exp > 0 ? 100 : 0)) + '%;"></div></div>';
+
+      const catMap = {};
+      tfOps.filter(function (o) { return o.type === 'expense'; }).forEach(function (o) {
+        catMap[o.category] = (catMap[o.category] || 0) + o.amount;
+      });
+      const cEntries = Object.entries(catMap);
+      document.getElementById('dashCategoryList').innerHTML = cEntries.length
+        ? cEntries.map(function (it) { return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--wa-line);font-size:0.84rem;"><span>' + esc(it[0]) + '</span><strong>' + fmtMoney(it[1]) + '</strong></div>'; }).join('')
+        : '<div style="color:var(--wa-muted);font-size:0.84rem;">Aucune dépense sur cette période.</div>';
+
+      document.getElementById('dashCapsPreview').innerHTML = Object.entries(db.caps).map(function (ent) {
+        const cap = Number(ent[1]) || 0;
+        const sp = catMap[ent[0]] || 0;
+        const pct = cap > 0 ? Math.min(100, Math.round((sp / cap) * 100)) : 0;
+        return '<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:0.82rem;"><span>' + esc(ent[0]) + '</span><span>' + fmtMoney(sp) + ' / ' + fmtMoney(cap) + '</span></div><div class="meter-bg"><div class="meter-fill" style="width:' + pct + '%;background:' + (pct >= 100 ? 'var(--danger)' : 'var(--wa-accent)') + ';"></div></div></div>';
+      }).join('');
+
+      document.getElementById('dashRecentOps').innerHTML = db.operations.slice(0, 5).map(function (op) {
+        const env = db.envelopes.find(function (e) { return e.id === op.envelopeId; });
+        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--wa-line);font-size:0.84rem;"><span><strong>' + esc(op.label) + '</strong> <small style="color:var(--wa-muted);">• ' + esc(env ? env.name : '') + '</small></span><strong style="color:' + (op.type === 'income' ? 'var(--ok)' : 'var(--danger)') + ';">' + (op.type === 'income' ? '+' : '-') + fmtMoney(op.amount) + '</strong></div>';
+      }).join('') || '<div style="color:var(--wa-muted);font-size:0.84rem;">Aucune opération récente.</div>';
+
+      // Historique
+      const q = String(document.getElementById('histSearchBox').value || '').toLowerCase().trim();
+      const cf = document.getElementById('histCategoryFilter').value;
+      const rows = db.operations.filter(function (o) {
+        return (!q || String(o.label).toLowerCase().includes(q)) && (cf === 'ALL' || o.category === cf);
+      });
+      document.getElementById('histRowsBody').innerHTML = rows.map(function (op) {
+        const env = db.envelopes.find(function (e) { return e.id === op.envelopeId; });
+        const attBtn = op.attachment ? '<button type="button" class="btn btn-soft btn-sm" onclick="viewReceiptById(\'' + esc(op.id) + '\')">📎 Voir</button>' : '—';
+        return (
+          '<tr>' +
+            '<td>' + esc((op.date || '').slice(0, 10)) + '</td>' +
+            '<td><strong>' + esc(op.label) + '</strong></td>' +
+            '<td>' + esc(op.category || 'Autres') + '</td>' +
+            '<td>' + esc((env ? env.name : 'Enveloppe') + ' • ' + (op.wallet || 'Espèces')) + '</td>' +
+            '<td>' + attBtn + '</td>' +
+            '<td style="font-weight:700;color:' + (op.type === 'income' ? 'var(--ok)' : 'var(--danger)') + ';">' + (op.type === 'income' ? '+' : '-') + fmtMoney(op.amount) + '</td>' +
+            '<td>' +
+              '<button type="button" class="btn btn-soft btn-sm" onclick="editOperationById(\'' + esc(op.id) + '\')">Éditer</button> ' +
+              '<button type="button" class="btn btn-soft-red btn-sm" onclick="deleteOperationById(\'' + esc(op.id) + '\')">Supprimer</button>' +
+            '</td>' +
+          '</tr>'
+        );
+      }).join('') || '<tr><td colspan="7" style="color:var(--wa-muted);">Aucune opération.</td></tr>';
+
+      // Comparateur & Calendrier thermique
+      const mode = document.getElementById('cmpPeriodSelect').value;
+      const curM = {}, prevM = {};
+      db.operations.filter(function (o) { return o.type === 'expense'; }).forEach(function (o) {
+        const d = new Date(o.date);
+        const c = o.category || 'Autres';
+        if (mode === 'month') {
+          if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) curM[c] = (curM[c] || 0) + o.amount;
+          const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          if (d.getFullYear() === pm.getFullYear() && d.getMonth() === pm.getMonth()) prevM[c] = (prevM[c] || 0) + o.amount;
+        } else if (mode === 'year') {
+          if (d.getFullYear() === now.getFullYear()) curM[c] = (curM[c] || 0) + o.amount;
+          if (d.getFullYear() === now.getFullYear() - 1) prevM[c] = (prevM[c] || 0) + o.amount;
+        } else {
+          const df = (now - d) / 86400000;
+          if (df >= 0 && df <= 7) curM[c] = (curM[c] || 0) + o.amount;
+          else if (df > 7 && df <= 14) prevM[c] = (prevM[c] || 0) + o.amount;
+        }
+      });
+      const keys = Array.from(new Set(Object.keys(curM).concat(Object.keys(prevM))));
+      document.getElementById('cmpRowsBody').innerHTML = keys.map(function (k) {
+        const a = curM[k] || 0, b = prevM[k] || 0;
+        const pct = b > 0 ? Math.round(((a - b) / b) * 100) : (a > 0 ? 100 : 0);
+        return '<tr><td>' + esc(k) + '</td><td>' + fmtMoney(a) + '</td><td>' + fmtMoney(b) + '</td><td>' + (pct >= 0 ? '+' : '') + pct + ' %</td></tr>';
+      }).join('') || '<tr><td colspan="4" style="color:var(--wa-muted);">Aucune donnée comparative.</td></tr>';
+
+      const dMap = {};
+      db.operations.filter(function (o) {
+        if (o.type !== 'expense') return false;
+        const d = new Date(o.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      }).forEach(function (o) {
+        const dy = new Date(o.date).getDate();
+        dMap[dy] = (dMap[dy] || 0) + o.amount;
+      });
+      const mx = Math.max(1, ...Object.values(dMap));
+      let cells = '';
+      for (let i = 1; i <= dim; i++) {
+        const v = dMap[i] || 0;
+        const bg = v === 0 ? 'var(--wa-soft)' : (v / mx > 0.6 ? 'var(--danger-bg)' : 'var(--warn-bg)');
+        cells += '<div class="cal-day" style="background:' + bg + ';"><strong>' + i + '</strong><div>' + (v > 0 ? fmtMoney(v) : '—') + '</div></div>';
+      }
+      document.getElementById('heatCalendarGrid').innerHTML = cells;
+
+      // Simulateur, charges, objectifs, plafonds
+      const pct = Number(document.getElementById('simSliderInput').value) || 0;
+      document.getElementById('simSliderLabel').textContent = pct + ' %';
+      const mExp = db.operations.filter(function (o) {
+        if (o.type !== 'expense') return false;
+        const d = new Date(o.date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      }).reduce(function (s, o) { return s + o.amount; }, 0);
+      const gM = mExp * (pct / 100);
+      document.getElementById('simOut3').textContent = fmtMoney(gM * 3);
+      document.getElementById('simOut12').textContent = fmtMoney(gM * 12);
+
+      document.getElementById('fixedBillsList').innerHTML = db.bills.map(function (b, idx) {
+        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--wa-line);font-size:0.84rem;"><span>' + esc(b.name) + ' — <strong>' + fmtMoney(b.amount) + '</strong></span><button type="button" class="btn btn-soft-red btn-sm" onclick="removeBillAt(' + idx + ')">✕</button></div>';
+      }).join('') || '<div style="color:var(--wa-muted);font-size:0.82rem;">Aucune charge fixe.</div>';
+
+      document.getElementById('savingsGoalsList').innerHTML = db.goals.map(function (g, idx) {
+        const p = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+        return '<div style="margin-bottom:8px;font-size:0.84rem;"><div style="display:flex;justify-content:space-between;"><strong>' + esc(g.name) + '</strong><span>' + fmtMoney(g.saved) + ' / ' + fmtMoney(g.target) + ' (' + p + ' %) <button type="button" class="btn btn-soft-red btn-sm" onclick="removeGoalAt(' + idx + ')">✕</button></span></div><div class="meter-bg"><div class="meter-fill" style="width:' + p + '%;"></div></div></div>';
+      }).join('') || '<div style="color:var(--wa-muted);font-size:0.82rem;">Aucun objectif.</div>';
+
+      document.getElementById('capsFormGrid').innerHTML = Object.keys(db.caps).map(function (c) {
+        return '<div><label>' + esc(c) + '</label><input type="number" value="' + (db.caps[c] || 0) + '" onchange="updateCapVal(\'' + esc(c) + '\', this.value)" /></div>';
+      }).join('');
+    }
+
+    document.getElementById('histSearchBox').addEventListener('input', renderDashboard);
+    document.getElementById('histCategoryFilter').addEventListener('change', renderDashboard);
+    document.getElementById('cmpPeriodSelect').addEventListener('change', renderDashboard);
+    document.getElementById('simSliderInput').addEventListener('input', renderDashboard);
+
+    document.getElementById('btnAddFixedBill').addEventListener('click', function () {
+      const n = String(document.getElementById('newBillName').value || '').trim();
+      const a = parseFloat(document.getElementById('newBillAmount').value);
+      if (!n || !Number.isFinite(a) || a <= 0) return;
+      db.bills.push({ name: n, amount: a });
+      document.getElementById('newBillName').value = '';
+      document.getElementById('newBillAmount').value = '';
+      saveDb(); renderDashboard();
+    });
+    window.removeBillAt = function (i) { db.bills.splice(i, 1); saveDb(); renderDashboard(); };
+
+    document.getElementById('btnAddSavingsGoal').addEventListener('click', function () {
+      const n = String(document.getElementById('newGoalName').value || '').trim();
+      const t = parseFloat(document.getElementById('newGoalTarget').value);
+      const s = parseFloat(document.getElementById('newGoalSaved').value) || 0;
+      if (!n || !Number.isFinite(t) || t <= 0) return;
+      db.goals.push({ name: n, target: t, saved: s });
+      document.getElementById('newGoalName').value = '';
+      document.getElementById('newGoalTarget').value = '';
+      document.getElementById('newGoalSaved').value = '';
+      saveDb(); renderDashboard();
+    });
+    window.removeGoalAt = function (i) { db.goals.splice(i, 1); saveDb(); renderDashboard(); };
+    window.updateCapVal = function (c, v) { db.caps[c] = Math.max(0, parseFloat(v) || 0); saveDb(); renderDashboard(); };
+
+    // --- PIN & Devise ---
+    function applyPinLock() {
+      const ov = document.getElementById('pinLockOverlay');
+      if (db.pin) { ov.classList.add('active'); pinReset(); }
+      else ov.classList.remove('active');
+    }
+    window.pinPush = function (d) {
+      if (pinBuffer.length < 4) {
+        pinBuffer += d;
+        document.getElementById('pinDots').textContent = '● '.repeat(pinBuffer.length) + '• '.repeat(4 - pinBuffer.length);
+      }
+    };
+    window.pinReset = function () {
+      pinBuffer = '';
+      document.getElementById('pinDots').textContent = '• • • •';
+      document.getElementById('pinErr').textContent = '';
+    };
+    window.pinVerify = function () {
+      if (pinBuffer === db.pin) { document.getElementById('pinLockOverlay').classList.remove('active'); pinReset(); }
+      else { document.getElementById('pinErr').textContent = 'PIN incorrect.'; pinReset(); }
+    };
+
+    document.getElementById('btnEnablePin').addEventListener('click', function () {
+      const v = String(document.getElementById('pinCodeField').value || '').trim();
+      if (!/^\d{4}$/.test(v)) { alert('Saisissez un PIN à 4 chiffres.'); return; }
+      db.pin = v;
+      document.getElementById('pinCodeField').value = '';
+      saveDb(); alert('Code PIN activé.');
+    });
+    document.getElementById('btnDisablePin').addEventListener('click', function () { db.pin = null; saveDb(); alert('Code PIN désactivé.'); });
+
+    document.querySelectorAll('.currency-choice').forEach(function (b) {
+      b.addEventListener('click', function () { db.currency = b.dataset.cur; saveDb(); renderDashboard(); });
+    });
+
+    // --- Export / Import JSON ---
+    function exportJsonFile() {
+      const payload = Object.assign({}, db, {
+        smartModule: { envelopes: db.envelopes, smartOperations: db.operations },
         exportedAt: new Date().toISOString()
       });
-    },
-    applyFullBackup: function (parsedJson, restoreExistingAppFn) {
-      if (!parsedJson || typeof parsedJson !== 'object') return;
-      if (typeof restoreExistingAppFn === 'function') {
-        restoreExistingAppFn(parsedJson);
-      }
-      const smartPart = parsedJson.smartModule || parsedJson;
-      this.restorePayload(smartPart);
-    },
-    downloadJson: function (existingAppData, filename) {
-      const fullData = this.buildFullBackup(existingAppData);
-      const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename || ('fintrack-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+      a.download = 'fintrack-dashboard-' + new Date().toISOString().slice(0, 10) + '.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-    },
-    handleFileImport: function (file, restoreExistingAppFn, onError) {
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function (ev) {
-        try {
-          const parsed = JSON.parse(ev.target.result);
-          window.FinTrackSmartBackup.applyFullBackup(parsed, restoreExistingAppFn);
-        } catch (err) {
-          if (typeof onError === 'function') {
-            onError(err);
-          } else {
-            showGuardAlert('Fichier JSON invalide ou corrompu.', true);
-          }
-        }
-      };
-      reader.readAsText(file);
     }
-  };
 
-  // --- Initialisation au chargement de la page ---
-  persistAndRender();
-})();
-</script>
+    function importJsonFile(file) {
+      if (!file) return;
+      const r = new FileReader();
+      r.onload = function (ev) {
+        try {
+          const p = JSON.parse(ev.target.result);
+          const sm = p.smartModule || {};
+          db = Object.assign(defaultState(), p, {
+            envelopes: Array.isArray(p.envelopes) ? p.envelopes : (Array.isArray(sm.envelopes) ? sm.envelopes : defaultState().envelopes),
+            operations: Array.isArray(p.operations) ? p.operations : (Array.isArray(sm.smartOperations) ? sm.smartOperations : [])
+          });
+          applyWaTheme(); saveDb(); renderDashboard(); applyPinLock();
+          alert('Données restaurées.');
+        } catch (_) { alert('Fichier JSON invalide.'); }
+      };
+      r.readAsText(file);
+    }
+
+    document.getElementById('btnDownloadBackup').addEventListener('click', exportJsonFile);
+    document.getElementById('inputRestoreBackup').addEventListener('change', function (e) {
+      importJsonFile(e.target.files && e.target.files[0]);
+      e.target.value = '';
+    });
+
+    document.getElementById('btnLoadDemoData').addEventListener('click', function () {
+      const today = new Date().toISOString().slice(0, 10);
+      db.envelopes = [
+        { id: 'env-poche', name: 'Portefeuille', balance: 45000 },
+        { id: 'env-coffre', name: 'Coffre', balance: 160000 }
+      ];
+      db.operations = [
+        { id: 'demo-inc', type: 'income', amount: 180000, label: 'Salaire', category: 'Salaire / Revenus', subcategory: '', wallet: 'Banque', envelopeId: 'env-coffre', date: today, attachment: null },
+        { id: 'demo-exp', type: 'expense', amount: 7500, label: 'Carburant & repas', category: 'Transport', subcategory: '', wallet: 'Mobile Money', envelopeId: 'env-poche', date: today, attachment: null }
+      ];
+      db.lastCreatedId = null;
+      saveDb(); renderDashboard();
+    });
+
+    window.FinTrackSmartBackup = {
+      getPayload: function () { return { envelopes: db.envelopes.slice(), smartOperations: db.operations.slice() }; },
+      restorePayload: function (p) {
+        if (!p || typeof p !== 'object') return;
+        if (Array.isArray(p.envelopes) && p.envelopes.length) db.envelopes = p.envelopes;
+        if (Array.isArray(p.smartOperations)) db.operations = p.smartOperations;
+        saveDb(); renderDashboard();
+      },
+      downloadJson: exportJsonFile,
+      handleFileImport: importJsonFile
+    };
+
+    // Initialisation
+    applyWaTheme();
+    resetDraft(true);
+    applyPinLock();
+    renderDashboard();
+  })();
+  </script>
+</body>
+</html>
